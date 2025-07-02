@@ -29,20 +29,25 @@ interface ProfileSheetProps {
 export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent side="right" className="w-full sm:max-w-md z-[9999] bg-white">
-        <SheetHeader className="text-left">
+      <SheetContent side="right" className="w-full sm:max-w-md z-[9999] bg-white overflow-y-auto">
+        <SheetHeader className="text-left pb-4">
           <div className="flex items-center justify-between">
             <SheetTitle className="text-xl font-bold text-gray-900">Profil</SheetTitle>
-            <Button variant="ghost" size="sm" onClick={onClose}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              className="hover:bg-gray-100 transition-colors duration-200"
+            >
               <X className="w-4 h-4" />
             </Button>
           </div>
         </SheetHeader>
 
-        <div className="space-y-6 py-6">
+        <div className="space-y-6 py-2 animate-in fade-in-0 slide-in-from-right-4 duration-500">
           {/* User Info */}
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+          <div className="flex items-center gap-4 animate-in fade-in-0 slide-in-from-right-2 duration-600 delay-100">
+            <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-2xl font-bold shadow-lg">
               {user.avatar}
             </div>
             <div>
@@ -52,31 +57,39 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-4">
-            <div className="text-center p-3 bg-purple-50 rounded-lg">
+          <div className="grid grid-cols-3 gap-4 animate-in fade-in-0 slide-in-from-right-2 duration-600 delay-200">
+            <div className="text-center p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors duration-200 cursor-pointer">
               <div className="text-2xl font-bold text-purple-600">{user.friends}</div>
               <div className="text-sm text-gray-600">Amis</div>
             </div>
-            <div className="text-center p-3 bg-pink-50 rounded-lg">
+            <div className="text-center p-3 bg-pink-50 rounded-lg hover:bg-pink-100 transition-colors duration-200 cursor-pointer">
               <div className="text-2xl font-bold text-pink-600">{user.savedEvents}</div>
               <div className="text-sm text-gray-600">Sauvegardés</div>
             </div>
-            <div className="text-center p-3 bg-blue-50 rounded-lg">
+            <div className="text-center p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors duration-200 cursor-pointer">
               <div className="text-2xl font-bold text-blue-600">{user.attendedEvents}</div>
               <div className="text-sm text-gray-600">Participés</div>
             </div>
           </div>
 
           {/* Interests */}
-          <div>
+          <div className="animate-in fade-in-0 slide-in-from-right-2 duration-600 delay-300">
             <h3 className="font-semibold text-gray-900 mb-3">Centres d'intérêt</h3>
             <div className="flex flex-wrap gap-2">
               {user.interests.map((interest, index) => (
-                <Badge key={index} variant="secondary" className="bg-purple-100 text-purple-700">
+                <Badge
+                  key={index}
+                  variant="secondary"
+                  className="bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors duration-200 cursor-pointer"
+                >
                   {interest}
                 </Badge>
               ))}
-              <Button variant="outline" size="sm" className="h-6 px-2 bg-transparent">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 px-2 bg-transparent hover:bg-purple-50 transition-colors duration-200"
+              >
                 <Plus className="w-3 h-3 mr-1" />
                 Ajouter
               </Button>
@@ -84,12 +97,15 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
           </div>
 
           {/* Friends Activity */}
-          <div>
+          <div className="animate-in fade-in-0 slide-in-from-right-2 duration-600 delay-400">
             <h3 className="font-semibold text-gray-900 mb-3">Activité des amis</h3>
             <div className="space-y-3">
               {friendsActivity.map((activity, index) => (
-                <div key={index} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                  <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                <div
+                  key={index}
+                  className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all duration-200 cursor-pointer hover:scale-[1.02]"
+                >
+                  <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm">
                     {activity.name[0]}
                   </div>
                   <div className="flex-1">
@@ -104,20 +120,32 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
           </div>
 
           {/* Action Buttons */}
-          <div className="space-y-3 pt-4 border-t">
-            <Button variant="outline" className="w-full justify-start bg-transparent">
+          <div className="space-y-3 pt-4 border-t animate-in fade-in-0 slide-in-from-right-2 duration-600 delay-500">
+            <Button
+              variant="outline"
+              className="w-full justify-start bg-transparent hover:bg-purple-50 hover:border-purple-200 transition-all duration-200 hover:scale-[1.02]"
+            >
               <Users className="w-4 h-4 mr-3" />
               Gérer mes amis
             </Button>
-            <Button variant="outline" className="w-full justify-start bg-transparent">
+            <Button
+              variant="outline"
+              className="w-full justify-start bg-transparent hover:bg-pink-50 hover:border-pink-200 transition-all duration-200 hover:scale-[1.02]"
+            >
               <Heart className="w-4 h-4 mr-3" />
               Événements sauvegardés
             </Button>
-            <Button variant="outline" className="w-full justify-start bg-transparent">
+            <Button
+              variant="outline"
+              className="w-full justify-start bg-transparent hover:bg-blue-50 hover:border-blue-200 transition-all duration-200 hover:scale-[1.02]"
+            >
               <Calendar className="w-4 h-4 mr-3" />
               Mon historique
             </Button>
-            <Button variant="outline" className="w-full justify-start bg-transparent">
+            <Button
+              variant="outline"
+              className="w-full justify-start bg-transparent hover:bg-gray-50 hover:border-gray-200 transition-all duration-200 hover:scale-[1.02]"
+            >
               <Settings className="w-4 h-4 mr-3" />
               Paramètres
             </Button>
