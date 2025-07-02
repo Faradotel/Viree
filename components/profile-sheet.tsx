@@ -29,7 +29,7 @@ interface ProfileSheetProps {
 export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent side="right" className="w-full sm:max-w-md">
+      <SheetContent side="right" className="w-full sm:max-w-md z-[9999] bg-white">
         <SheetHeader className="text-left">
           <div className="flex items-center justify-between">
             <SheetTitle className="text-xl font-bold text-gray-900">Profil</SheetTitle>
