@@ -5,16 +5,20 @@ import { MapView } from "@/components/map-view"
 import { EventFeed } from "@/components/event-feed"
 import { ProfileSheet } from "@/components/profile-sheet"
 import { EventSheet } from "@/components/event-sheet"
+import { LocationSharingSheet } from "@/components/location-sharing-sheet"
 import { Button } from "@/components/ui/button"
-import { Map, List, User } from "lucide-react"
+import { Map, List, User, MapPin } from "lucide-react"
+import { hapticFeedback } from "@/utils/haptics"
 
 export default function HomePage() {
   const [activeView, setActiveView] = useState<"map" | "feed">("map")
   const [selectedEvent, setSelectedEvent] = useState(null)
   const [showProfile, setShowProfile] = useState(false)
+  const [showLocationSharing, setShowLocationSharing] = useState(false)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [searchRadius, setSearchRadius] = useState<number>(2)
   const [selectedFilters, setSelectedFilters] = useState<string[]>([])
+  const [isLocationShared, setIsLocationShared] = useState(false)
 
   useEffect(() => {
     // Listen for location updates from MapView
@@ -30,6 +34,31 @@ export default function HomePage() {
     }
   }, [])
 
+  const handleViewChange = (view: "map" | "feed") => {
+    hapticFeedback.selection()
+    setActiveView(view)
+  }
+
+  const handleProfileOpen = () => {
+    hapticFeedback.press()
+    setShowProfile(true)
+  }
+
+  const handleLocationSharingOpen = () => {
+    hapticFeedback.tap()
+    setShowLocationSharing(true)
+  }
+
+  const handleEventSelect = (event: any) => {
+    hapticFeedback.press()
+    setSelectedEvent(event)
+  }
+
+  const handleLocationSharingToggle = (shared: boolean) => {
+    hapticFeedback.success()
+    setIsLocationShared(shared)
+  }
+
   return (
     <div className="h-screen flex flex-col bg-gradient-to-br from-purple-50 to-pink-50">
       {/* Header */}
@@ -42,23 +71,37 @@ export default function HomePage() {
             Virée
           </h1>
         </div>
-        <Button variant="ghost" size="sm" onClick={() => setShowProfile(true)} className="rounded-full">
-          <User className="w-5 h-5" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={handleLocationSharingOpen}
+            className="relative rounded-full"
+            haptic="tap"
+          >
+            <MapPin className="w-5 h-5" />
+            {isLocationShared && (
+              <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+            )}
+          </Button>
+          <Button variant="ghost" size="sm" onClick={handleProfileOpen} className="rounded-full" haptic="press">
+            <User className="w-5 h-5" />
+          </Button>
+        </div>
       </header>
 
       {/* Main Content */}
       <main className="flex-1 relative z-0">
         {activeView === "feed" ? (
           <EventFeed
-            onEventSelect={setSelectedEvent}
+            onEventSelect={handleEventSelect}
             userLocation={userLocation}
             searchRadius={searchRadius}
             selectedFilters={selectedFilters}
             onFiltersChange={setSelectedFilters}
           />
         ) : (
-          <MapView onEventSelect={setSelectedEvent} />
+          <MapView onEventSelect={handleEventSelect} />
         )}
       </main>
 
@@ -68,10 +111,11 @@ export default function HomePage() {
           <Button
             variant={activeView === "map" ? "default" : "ghost"}
             size="sm"
-            onClick={() => setActiveView("map")}
+            onClick={() => handleViewChange("map")}
             className={`flex items-center gap-2 ${
               activeView === "map" ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white" : "text-gray-600"
             }`}
+            haptic="selection"
           >
             <Map className="w-4 h-4" />
             Carte
@@ -79,10 +123,11 @@ export default function HomePage() {
           <Button
             variant={activeView === "feed" ? "default" : "ghost"}
             size="sm"
-            onClick={() => setActiveView("feed")}
+            onClick={() => handleViewChange("feed")}
             className={`flex items-center gap-2 ${
               activeView === "feed" ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white" : "text-gray-600"
             }`}
+            haptic="selection"
           >
             <List className="w-4 h-4" />
             Feed
@@ -95,6 +140,14 @@ export default function HomePage() {
 
       {/* Profile Sheet */}
       <ProfileSheet open={showProfile} onClose={() => setShowProfile(false)} />
+
+      {/* Location Sharing Sheet */}
+      <LocationSharingSheet
+        open={showLocationSharing}
+        onClose={() => setShowLocationSharing(false)}
+        isShared={isLocationShared}
+        onToggleSharing={handleLocationSharingToggle}
+      />
     </div>
   )
 }

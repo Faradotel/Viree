@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Settings, Users, Heart, Calendar, X, Plus } from "lucide-react"
+import { hapticFeedback } from "@/utils/haptics"
 
 const user = {
   name: "Alex",
@@ -37,6 +38,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
               variant="ghost"
               size="sm"
               onClick={onClose}
+              haptic="tap"
               className="hover:bg-gray-100 transition-colors duration-200"
             >
               <X className="w-4 h-4" />
@@ -58,15 +60,24 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
 
           {/* Stats */}
           <div className="grid grid-cols-3 gap-4 animate-in fade-in-0 slide-in-from-right-2 duration-600 delay-200">
-            <div className="text-center p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors duration-200 cursor-pointer">
+            <div
+              className="text-center p-3 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors duration-200 cursor-pointer"
+              onClick={() => hapticFeedback.tap()}
+            >
               <div className="text-2xl font-bold text-purple-600">{user.friends}</div>
               <div className="text-sm text-gray-600">Amis</div>
             </div>
-            <div className="text-center p-3 bg-pink-50 rounded-lg hover:bg-pink-100 transition-colors duration-200 cursor-pointer">
+            <div
+              className="text-center p-3 bg-pink-50 rounded-lg hover:bg-pink-100 transition-colors duration-200 cursor-pointer"
+              onClick={() => hapticFeedback.tap()}
+            >
               <div className="text-2xl font-bold text-pink-600">{user.savedEvents}</div>
               <div className="text-sm text-gray-600">Sauvegardés</div>
             </div>
-            <div className="text-center p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors duration-200 cursor-pointer">
+            <div
+              className="text-center p-3 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors duration-200 cursor-pointer"
+              onClick={() => hapticFeedback.tap()}
+            >
               <div className="text-2xl font-bold text-blue-600">{user.attendedEvents}</div>
               <div className="text-sm text-gray-600">Participés</div>
             </div>
@@ -81,6 +92,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
                   key={index}
                   variant="secondary"
                   className="bg-purple-100 text-purple-700 hover:bg-purple-200 transition-colors duration-200 cursor-pointer"
+                  onClick={() => hapticFeedback.selection()}
                 >
                   {interest}
                 </Badge>
@@ -88,6 +100,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
               <Button
                 variant="outline"
                 size="sm"
+                haptic="tap"
                 className="h-6 px-2 bg-transparent hover:bg-purple-50 transition-colors duration-200"
               >
                 <Plus className="w-3 h-3 mr-1" />
@@ -104,6 +117,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
                 <div
                   key={index}
                   className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all duration-200 cursor-pointer hover:scale-[1.02]"
+                  onClick={() => hapticFeedback.tap()}
                 >
                   <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-sm">
                     {activity.name[0]}
@@ -123,6 +137,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
           <div className="space-y-3 pt-4 border-t animate-in fade-in-0 slide-in-from-right-2 duration-600 delay-500">
             <Button
               variant="outline"
+              haptic="tap"
               className="w-full justify-start bg-transparent hover:bg-purple-50 hover:border-purple-200 transition-all duration-200 hover:scale-[1.02]"
             >
               <Users className="w-4 h-4 mr-3" />
@@ -130,6 +145,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
             </Button>
             <Button
               variant="outline"
+              haptic="tap"
               className="w-full justify-start bg-transparent hover:bg-pink-50 hover:border-pink-200 transition-all duration-200 hover:scale-[1.02]"
             >
               <Heart className="w-4 h-4 mr-3" />
@@ -137,6 +153,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
             </Button>
             <Button
               variant="outline"
+              haptic="tap"
               className="w-full justify-start bg-transparent hover:bg-blue-50 hover:border-blue-200 transition-all duration-200 hover:scale-[1.02]"
             >
               <Calendar className="w-4 h-4 mr-3" />
@@ -144,6 +161,7 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
             </Button>
             <Button
               variant="outline"
+              haptic="tap"
               className="w-full justify-start bg-transparent hover:bg-gray-50 hover:border-gray-200 transition-all duration-200 hover:scale-[1.02]"
             >
               <Settings className="w-4 h-4 mr-3" />

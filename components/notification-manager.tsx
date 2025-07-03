@@ -1,37 +1,40 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Bell, BellRing, X, Settings, Volume2, VolumeX, Smartphone } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { Bell, BellOff, X, MapPin, Clock, Euro, Users } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 import { isWithinRadius } from "@/utils/distance"
+import { hapticFeedback } from "@/utils/haptics"
 
 interface NotificationSettings {
   enabled: boolean
   browserNotifications: boolean
   soundEnabled: boolean
   categories: string[]
-  minRadius: number
-  maxRadius: number
 }
 
-interface EventNotification {
+interface Notification {
   id: string
-  event: any
-  timestamp: Date
+  eventId: number
+  eventName: string
+  eventLocation: string
+  eventTime: string
+  eventPrice: string
   distance: number
-  isRead: boolean
+  timestamp: Date
+  read: boolean
 }
 
 interface NotificationManagerProps {
   userLocation: { lat: number; lng: number } | null
   searchRadius: number
   allEvents: any[]
-  onNewEventAlert?: (event: any) => void
+  onNewEventAlert: (event: any) => void
 }
 
 const defaultSettings: NotificationSettings = {
@@ -39,8 +42,13 @@ const defaultSettings: NotificationSettings = {
   browserNotifications: false,
   soundEnabled: true,
   categories: ["music", "art", "social", "coffee"],
-  minRadius: 0.5,
-  maxRadius: 25,
+}
+
+const categoryLabels = {
+  music: "Concerts & Musique",
+  art: "Art & Expositions",
+  social: "Bars & Social",
+  coffee: "Café & Dégustation",
 }
 
 export function NotificationManager({
@@ -50,437 +58,371 @@ export function NotificationManager({
   onNewEventAlert,
 }: NotificationManagerProps) {
   const [settings, setSettings] = useState<NotificationSettings>(defaultSettings)
-  const [notifications, setNotifications] = useState<EventNotification[]>([])
-  const [showNotifications, setShowNotifications] = useState(false)
-  const [showSettings, setShowSettings] = useState(false)
-  const [lastEventCheck, setLastEventCheck] = useState<Date>(new Date())
-  const [hasPermission, setHasPermission] = useState<boolean>(false)
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [isOpen, setIsOpen] = useState(false)
+  const [lastCheckedEvents, setLastCheckedEvents] = useState<Set<number>>(new Set())
+  const [browserPermission, setBrowserPermission] = useState<NotificationPermission>("default")
 
-  // Check for browser notification permission
+  // Check browser notification permission
   useEffect(() => {
-    if ("Notification" in window) {
-      setHasPermission(Notification.permission === "granted")
+    if (typeof window !== "undefined" && "Notification" in window) {
+      setBrowserPermission(Notification.permission)
     }
   }, [])
 
-  // Request notification permission
-  const requestNotificationPermission = async () => {
-    if ("Notification" in window) {
+  // Request browser notification permission
+  const requestBrowserPermission = async () => {
+    if (typeof window !== "undefined" && "Notification" in window) {
       const permission = await Notification.requestPermission()
-      setHasPermission(permission === "granted")
+      setBrowserPermission(permission)
       if (permission === "granted") {
+        hapticFeedback.success()
         setSettings((prev) => ({ ...prev, browserNotifications: true }))
+      } else {
+        hapticFeedback.impact()
       }
     }
   }
 
-  // Simulate new events appearing (in real app, this would come from API/WebSocket)
-  useEffect(() => {
-    if (!settings.enabled || !userLocation) return
+  // Play notification sound
+  const playNotificationSound = useCallback(() => {
+    if (settings.soundEnabled) {
+      try {
+        // Create a simple notification sound using Web Audio API
+        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+        const oscillator = audioContext.createOscillator()
+        const gainNode = audioContext.createGain()
 
-    const interval = setInterval(() => {
-      // Simulate a new event appearing randomly
-      if (Math.random() < 0.3) {
-        // 30% chance every 30 seconds
-        const newEvent = generateRandomEvent(userLocation, searchRadius)
-        if (newEvent) {
-          handleNewEvent(newEvent)
-        }
+        oscillator.connect(gainNode)
+        gainNode.connect(audioContext.destination)
+
+        oscillator.frequency.setValueAtTime(800, audioContext.currentTime)
+        oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1)
+
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime)
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.3)
+
+        oscillator.start(audioContext.currentTime)
+        oscillator.stop(audioContext.currentTime + 0.3)
+      } catch (error) {
+        console.log("Audio notification not available")
       }
-    }, 30000) // Check every 30 seconds
+    }
+  }, [settings.soundEnabled])
 
-    return () => clearInterval(interval)
-  }, [settings.enabled, userLocation, searchRadius])
+  // Show browser notification
+  const showBrowserNotification = useCallback(
+    (event: any, distance: number) => {
+      if (settings.browserNotifications && browserPermission === "granted") {
+        const notification = new Notification(`Nouvel événement près de vous!`, {
+          body: `${event.name} à ${distance.toFixed(1)}km - ${event.price}`,
+          icon: "/placeholder.svg?height=64&width=64",
+          tag: `event-${event.id}`,
+          requireInteraction: false,
+        })
 
-  // Check for new events in the current zone
+        notification.onclick = () => {
+          window.focus()
+          onNewEventAlert(event)
+          notification.close()
+        }
+
+        // Auto-close after 5 seconds
+        setTimeout(() => notification.close(), 5000)
+      }
+    },
+    [settings.browserNotifications, browserPermission, onNewEventAlert],
+  )
+
+  // Check for new events in zone
   const checkForNewEvents = useCallback(() => {
     if (!settings.enabled || !userLocation) return
 
-    const now = new Date()
     const eventsInZone = allEvents.filter((event) => {
-      // Check if event is in zone
       const inZone = isWithinRadius(userLocation.lat, userLocation.lng, event.lat, event.lng, searchRadius)
-      // Check if event category is enabled
       const categoryEnabled = settings.categories.includes(event.category)
-      // Simulate "new" events (in real app, you'd check creation timestamp)
-      const isNew = Math.random() < 0.1 // 10% chance to be considered "new"
+      const isNew = !lastCheckedEvents.has(event.id)
 
       return inZone && categoryEnabled && isNew
     })
 
-    eventsInZone.forEach((event) => {
-      handleNewEvent(event)
-    })
+    if (eventsInZone.length > 0) {
+      eventsInZone.forEach((event) => {
+        const distance = isWithinRadius(
+          userLocation.lat,
+          userLocation.lng,
+          event.lat,
+          event.lng,
+          searchRadius,
+          true,
+        ) as number
 
-    setLastEventCheck(now)
-  }, [settings, userLocation, searchRadius, allEvents])
+        // Create notification
+        const notification: Notification = {
+          id: `${event.id}-${Date.now()}`,
+          eventId: event.id,
+          eventName: event.name,
+          eventLocation: event.location,
+          eventTime: event.time,
+          eventPrice: event.price,
+          distance,
+          timestamp: new Date(),
+          read: false,
+        }
 
-  // Generate a random event for simulation
-  const generateRandomEvent = (location: { lat: number; lng: number }, radius: number) => {
-    const eventTypes = [
-      {
-        name: "Pop-up Bar",
-        category: "social",
-        type: "Bar",
-        description: "Bar éphémère avec cocktails créatifs",
-        price: "Gratuit",
-      },
-      {
-        name: "Street Art Tour",
-        category: "art",
-        type: "Visite",
-        description: "Découverte du street art local",
-        price: "5€",
-      },
-      {
-        name: "Acoustic Session",
-        category: "music",
-        type: "Concert",
-        description: "Session acoustique intimiste",
-        price: "8€",
-      },
-      {
-        name: "Coffee Tasting",
-        category: "coffee",
-        type: "Dégustation",
-        description: "Dégustation de cafés d'exception",
-        price: "12€",
-      },
-    ]
+        setNotifications((prev) => [notification, ...prev.slice(0, 9)]) // Keep last 10
 
-    const randomType = eventTypes[Math.floor(Math.random() * eventTypes.length)]
+        // Trigger haptic feedback
+        hapticFeedback.press()
 
-    // Generate random location within radius
-    const angle = Math.random() * 2 * Math.PI
-    const distance = Math.random() * radius * 0.8 // Within 80% of radius
-    const deltaLat = (distance / 111) * Math.cos(angle) // Rough conversion
-    const deltaLng = (distance / (111 * Math.cos((location.lat * Math.PI) / 180))) * Math.sin(angle)
+        // Play sound
+        playNotificationSound()
 
-    return {
-      id: Date.now() + Math.random(),
-      name: randomType.name,
-      location: "Près de vous",
-      time: "Maintenant",
-      category: randomType.category,
-      type: randomType.type,
-      description: randomType.description,
-      price: randomType.price,
-      attendees: Math.floor(Math.random() * 50) + 10,
-      friends: [],
-      lat: location.lat + deltaLat,
-      lng: location.lng + deltaLng,
-      isNew: true,
-    }
-  }
+        // Show browser notification
+        showBrowserNotification(event, distance)
 
-  // Handle new event detection
-  const handleNewEvent = (event: any) => {
-    if (!userLocation) return
-
-    const distance = isWithinRadius(userLocation.lat, userLocation.lng, event.lat, event.lng, searchRadius)
-      ? Math.round(
-          Math.sqrt(
-            Math.pow(userLocation.lat - event.lat, 2) * 111 * 111 +
-              Math.pow(userLocation.lng - event.lng, 2) * 111 * 111 * Math.cos((userLocation.lat * Math.PI) / 180),
-          ) * 100,
-        ) / 100
-      : 0
-
-    const notification: EventNotification = {
-      id: `${event.id}-${Date.now()}`,
-      event,
-      timestamp: new Date(),
-      distance,
-      isRead: false,
-    }
-
-    setNotifications((prev) => [notification, ...prev.slice(0, 9)]) // Keep last 10
-
-    // Play notification sound
-    if (settings.soundEnabled) {
-      playNotificationSound()
-    }
-
-    // Show browser notification
-    if (settings.browserNotifications && hasPermission) {
-      showBrowserNotification(event, distance)
-    }
-
-    // Callback to parent
-    onNewEventAlert?.(event)
-  }
-
-  // Play notification sound
-  const playNotificationSound = () => {
-    try {
-      const audio = new Audio(
-        "data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT",
-      )
-      audio.volume = 0.3
-      audio.play().catch(() => {
-        // Ignore audio play errors (browser restrictions)
+        // Notify parent component
+        onNewEventAlert(event)
       })
-    } catch (error) {
-      // Ignore audio errors
+
+      // Update checked events
+      setLastCheckedEvents((prev) => {
+        const newSet = new Set(prev)
+        eventsInZone.forEach((event) => newSet.add(event.id))
+        return newSet
+      })
     }
-  }
+  }, [
+    settings,
+    userLocation,
+    searchRadius,
+    allEvents,
+    lastCheckedEvents,
+    playNotificationSound,
+    showBrowserNotification,
+    onNewEventAlert,
+  ])
 
-  // Show browser notification
-  const showBrowserNotification = (event: any, distance: number) => {
-    if (!("Notification" in window) || Notification.permission !== "granted") return
-
-    const notification = new Notification(`🎉 Nouvel événement près de vous!`, {
-      body: `${event.name} - ${distance}km • ${event.time}`,
-      icon: "/favicon.ico",
-      badge: "/favicon.ico",
-      tag: `event-${event.id}`,
-      requireInteraction: false,
-      silent: false,
-    })
-
-    notification.onclick = () => {
-      window.focus()
-      setShowNotifications(true)
-      notification.close()
+  // Periodic check for new events
+  useEffect(() => {
+    if (settings.enabled && userLocation) {
+      const interval = setInterval(checkForNewEvents, 30000) // Check every 30 seconds
+      return () => clearInterval(interval)
     }
+  }, [checkForNewEvents, settings.enabled, userLocation])
 
-    // Auto close after 5 seconds
-    setTimeout(() => notification.close(), 5000)
+  // Manual refresh
+  const handleRefresh = () => {
+    hapticFeedback.tap()
+    checkForNewEvents()
   }
 
   // Mark notification as read
   const markAsRead = (notificationId: string) => {
-    setNotifications((prev) => prev.map((n) => (n.id === notificationId ? { ...n, isRead: true } : n)))
+    hapticFeedback.selection()
+    setNotifications((prev) => prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n)))
   }
 
   // Clear all notifications
-  const clearAllNotifications = () => {
+  const clearAll = () => {
+    hapticFeedback.impact()
     setNotifications([])
   }
 
-  const unreadCount = notifications.filter((n) => !n.isRead).length
+  // Update settings
+  const updateSettings = (newSettings: Partial<NotificationSettings>) => {
+    hapticFeedback.selection()
+    setSettings((prev) => ({ ...prev, ...newSettings }))
+  }
+
+  const unreadCount = notifications.filter((n) => !n.read).length
 
   return (
-    <>
-      {/* Notification Bell Button */}
-      <Button
-        onClick={() => setShowNotifications(true)}
-        className="bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white shadow-lg relative"
-        size="sm"
-      >
-        {settings.enabled ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
-        {unreadCount > 0 && (
-          <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-5 h-5 rounded-full p-0 flex items-center justify-center animate-pulse">
-            {unreadCount > 9 ? "9+" : unreadCount}
-          </Badge>
-        )}
-      </Button>
+    <Sheet open={isOpen} onOpenChange={setIsOpen}>
+      <SheetTrigger asChild>
+        <Button
+          className="bg-white/95 backdrop-blur-sm text-gray-700 hover:bg-white shadow-lg border border-gray-200 relative"
+          size="sm"
+          haptic="tap"
+        >
+          {unreadCount > 0 ? <BellRing className="w-4 h-4 mr-2 text-purple-500" /> : <Bell className="w-4 h-4 mr-2" />}
+          Alertes
+          {unreadCount > 0 && (
+            <Badge className="absolute -top-2 -right-2 bg-red-500 text-white text-xs w-5 h-5 rounded-full p-0 flex items-center justify-center animate-pulse">
+              {unreadCount}
+            </Badge>
+          )}
+        </Button>
+      </SheetTrigger>
 
-      {/* Notifications Sheet */}
-      <Sheet open={showNotifications} onOpenChange={setShowNotifications}>
-        <SheetContent side="right" className="w-full sm:max-w-md">
-          <SheetHeader className="text-left">
-            <div className="flex items-center justify-between">
-              <SheetTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                <Bell className="w-5 h-5 text-purple-500" />
-                Notifications ({unreadCount})
-              </SheetTitle>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setShowSettings(true)}>
-                  <Bell className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setShowNotifications(false)}>
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          </SheetHeader>
+      <SheetContent side="right" className="w-full sm:max-w-md">
+        <SheetHeader className="text-left">
+          <div className="flex items-center justify-between">
+            <SheetTitle className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Bell className="w-5 h-5 text-purple-500" />
+              Notifications
+            </SheetTitle>
+            <Button variant="ghost" size="sm" onClick={() => setIsOpen(false)} haptic="tap">
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
+        </SheetHeader>
 
-          <div className="space-y-4 py-6">
-            {/* Quick Actions */}
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={checkForNewEvents} className="flex-1 bg-transparent">
-                Vérifier maintenant
-              </Button>
-              <Button variant="outline" size="sm" onClick={clearAllNotifications} className="flex-1 bg-transparent">
-                Tout effacer
-              </Button>
+        <div className="space-y-6 py-6">
+          {/* Settings */}
+          <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-100">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-gray-900">Paramètres</h3>
+              <Settings className="w-4 h-4 text-purple-500" />
             </div>
 
-            {/* Notifications List */}
             <div className="space-y-3">
-              {notifications.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <Bell className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                  <p>Aucune notification</p>
-                  <p className="text-sm">Les nouveaux événements apparaîtront ici</p>
-                </div>
-              ) : (
-                notifications.map((notification) => (
-                  <Card
-                    key={notification.id}
-                    className={`cursor-pointer transition-all ${
-                      notification.isRead ? "opacity-60" : "border-purple-200 bg-purple-50"
-                    }`}
-                    onClick={() => markAsRead(notification.id)}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start justify-between mb-2">
-                        <h3 className="font-semibold text-gray-900">{notification.event.name}</h3>
-                        <Badge variant="outline" className="text-xs">
-                          {notification.event.type}
-                        </Badge>
-                      </div>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="notifications-enabled" className="text-sm font-medium">
+                  Activer les notifications
+                </Label>
+                <Switch
+                  id="notifications-enabled"
+                  checked={settings.enabled}
+                  onCheckedChange={(enabled) => updateSettings({ enabled })}
+                />
+              </div>
 
-                      <p className="text-sm text-gray-600 mb-3">{notification.event.description}</p>
+              {settings.enabled && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="browser-notifications" className="text-sm font-medium flex items-center gap-2">
+                      <Smartphone className="w-4 h-4" />
+                      Notifications navigateur
+                    </Label>
+                    <div className="flex items-center gap-2">
+                      {browserPermission === "default" && (
+                        <Button size="sm" variant="outline" onClick={requestBrowserPermission} haptic="tap">
+                          Autoriser
+                        </Button>
+                      )}
+                      <Switch
+                        id="browser-notifications"
+                        checked={settings.browserNotifications && browserPermission === "granted"}
+                        onCheckedChange={(enabled) => {
+                          if (enabled && browserPermission !== "granted") {
+                            requestBrowserPermission()
+                          } else {
+                            updateSettings({ browserNotifications: enabled })
+                          }
+                        }}
+                        disabled={browserPermission === "denied"}
+                      />
+                    </div>
+                  </div>
 
-                      <div className="space-y-1 text-xs text-gray-500">
-                        <div className="flex items-center gap-2">
-                          <MapPin className="w-3 h-3" />
-                          <span>{notification.distance}km de vous</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-3 h-3" />
-                          <span>{notification.event.time}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Euro className="w-3 h-3" />
-                          <span>{notification.event.price}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Users className="w-3 h-3" />
-                          <span>{notification.event.attendees} participants</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between mt-3">
-                        <span className="text-xs text-gray-400">
-                          {notification.timestamp.toLocaleTimeString("fr-FR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                        {!notification.isRead && <div className="w-2 h-2 bg-purple-500 rounded-full"></div>}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="sound-enabled" className="text-sm font-medium flex items-center gap-2">
+                      {settings.soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                      Sons de notification
+                    </Label>
+                    <Switch
+                      id="sound-enabled"
+                      checked={settings.soundEnabled}
+                      onCheckedChange={(soundEnabled) => updateSettings({ soundEnabled })}
+                    />
+                  </div>
+                </>
               )}
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
 
-      {/* Settings Sheet */}
-      <Sheet open={showSettings} onOpenChange={setShowSettings}>
-        <SheetContent side="right" className="w-full sm:max-w-md">
-          <SheetHeader className="text-left">
-            <div className="flex items-center justify-between">
-              <SheetTitle className="text-xl font-bold text-gray-900">Paramètres notifications</SheetTitle>
-              <Button variant="ghost" size="sm" onClick={() => setShowSettings(false)}>
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-          </SheetHeader>
-
-          <div className="space-y-6 py-6">
-            {/* Enable/Disable */}
-            <div className="flex items-center justify-between">
-              <Label htmlFor="notifications-enabled" className="font-medium">
-                Activer les notifications
-              </Label>
-              <Switch
-                id="notifications-enabled"
-                checked={settings.enabled}
-                onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, enabled: checked }))}
-              />
-            </div>
-
-            {/* Browser Notifications */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="browser-notifications" className="font-medium">
-                  Notifications navigateur
-                </Label>
-                <Switch
-                  id="browser-notifications"
-                  checked={settings.browserNotifications && hasPermission}
-                  onCheckedChange={(checked) => {
-                    if (checked && !hasPermission) {
-                      requestNotificationPermission()
-                    } else {
-                      setSettings((prev) => ({ ...prev, browserNotifications: checked }))
-                    }
-                  }}
-                  disabled={!settings.enabled}
-                />
-              </div>
-              {!hasPermission && (
-                <p className="text-xs text-amber-600">
-                  ⚠️ Autorisez les notifications dans votre navigateur pour recevoir des alertes
-                </p>
-              )}
-            </div>
-
-            {/* Sound */}
-            <div className="flex items-center justify-between">
-              <Label htmlFor="sound-enabled" className="font-medium">
-                Son des notifications
-              </Label>
-              <Switch
-                id="sound-enabled"
-                checked={settings.soundEnabled}
-                onCheckedChange={(checked) => setSettings((prev) => ({ ...prev, soundEnabled: checked }))}
-                disabled={!settings.enabled}
-              />
-            </div>
-
-            {/* Categories */}
-            <div className="space-y-3">
-              <Label className="font-medium">Types d'événements</Label>
+          {/* Category Filters */}
+          {settings.enabled && (
+            <div>
+              <h3 className="font-semibold text-gray-900 mb-3">Types d'événements à surveiller</h3>
               <div className="space-y-2">
-                {[
-                  { id: "music", label: "Musique & Concerts", icon: "🎵" },
-                  { id: "art", label: "Art & Expositions", icon: "🎨" },
-                  { id: "social", label: "Bars & Social", icon: "🍺" },
-                  { id: "coffee", label: "Café & Dégustation", icon: "☕" },
-                ].map((category) => (
-                  <div key={category.id} className="flex items-center justify-between">
-                    <Label htmlFor={`category-${category.id}`} className="flex items-center gap-2">
-                      <span>{category.icon}</span>
-                      {category.label}
-                    </Label>
-                    <Switch
-                      id={`category-${category.id}`}
-                      checked={settings.categories.includes(category.id)}
+                {Object.entries(categoryLabels).map(([category, label]) => (
+                  <div key={category} className="flex items-center space-x-3">
+                    <Checkbox
+                      id={`category-${category}`}
+                      checked={settings.categories.includes(category)}
                       onCheckedChange={(checked) => {
-                        setSettings((prev) => ({
-                          ...prev,
-                          categories: checked
-                            ? [...prev.categories, category.id]
-                            : prev.categories.filter((c) => c !== category.id),
-                        }))
+                        const newCategories = checked
+                          ? [...settings.categories, category]
+                          : settings.categories.filter((c) => c !== category)
+                        updateSettings({ categories: newCategories })
                       }}
-                      disabled={!settings.enabled}
                     />
+                    <Label htmlFor={`category-${category}`} className="text-sm">
+                      {label}
+                    </Label>
                   </div>
                 ))}
               </div>
             </div>
+          )}
 
-            {/* Info */}
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h4 className="font-medium text-blue-900 mb-2">ℹ️ Comment ça marche</h4>
-              <ul className="text-sm text-blue-800 space-y-1">
-                <li>• Notifications quand de nouveaux événements apparaissent dans votre zone</li>
-                <li>• Vérification automatique toutes les 30 secondes</li>
-                <li>• Filtrage par catégories sélectionnées</li>
-                <li>• Historique des 10 dernières notifications</li>
-              </ul>
+          {/* Notifications List */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-900">Alertes récentes ({notifications.length})</h3>
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={handleRefresh} haptic="tap">
+                  Actualiser
+                </Button>
+                {notifications.length > 0 && (
+                  <Button size="sm" variant="outline" onClick={clearAll} haptic="impact">
+                    Effacer
+                  </Button>
+                )}
+              </div>
             </div>
+
+            {notifications.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <Bell className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">Aucune notification pour le moment</p>
+                <p className="text-xs mt-1">Les nouveaux événements dans votre zone apparaîtront ici</p>
+              </div>
+            ) : (
+              <div className="space-y-3 max-h-64 overflow-y-auto">
+                {notifications.map((notification) => (
+                  <div
+                    key={notification.id}
+                    className={`p-3 rounded-lg border cursor-pointer transition-all duration-200 hover:shadow-sm ${
+                      notification.read ? "bg-gray-50 border-gray-200" : "bg-white border-purple-200 shadow-sm"
+                    }`}
+                    onClick={() => markAsRead(notification.id)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <h4 className={`font-medium text-sm ${notification.read ? "text-gray-700" : "text-gray-900"}`}>
+                          {notification.eventName}
+                        </h4>
+                        <p className="text-xs text-gray-500 mt-1">
+                          📍 {notification.eventLocation} • {notification.distance.toFixed(1)}km
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          🕐 {notification.eventTime} • {notification.eventPrice}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">{notification.timestamp.toLocaleTimeString()}</p>
+                      </div>
+                      {!notification.read && <div className="w-2 h-2 bg-purple-500 rounded-full flex-shrink-0 mt-1" />}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-        </SheetContent>
-      </Sheet>
-    </>
+
+          {/* Status Info */}
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <h4 className="font-medium text-blue-900 mb-2">ℹ️ Comment ça marche</h4>
+            <ul className="text-sm text-blue-800 space-y-1">
+              <li>• Vérification automatique toutes les 30 secondes</li>
+              <li>• Seuls les événements dans votre zone sont surveillés</li>
+              <li>• Filtrage par catégories sélectionnées</li>
+              <li>• Notifications avec son et vibrations</li>
+            </ul>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
   )
 }

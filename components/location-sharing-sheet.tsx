@@ -8,6 +8,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { X, MapPin, Clock, Share2, Eye, EyeOff } from "lucide-react"
+import { hapticFeedback } from "@/utils/haptics"
 
 interface Friend {
   id: string
@@ -88,59 +89,64 @@ const mockFriends: Friend[] = [
 interface LocationSharingSheetProps {
   open: boolean
   onClose: () => void
-  userLocation: { lat: number; lng: number } | null
-  onFriendsLocationUpdate: (friends: Friend[]) => void
+  isShared: boolean
+  onToggleSharing: (shared: boolean) => void
 }
 
-export function LocationSharingSheet({
-  open,
-  onClose,
-  userLocation,
-  onFriendsLocationUpdate,
-}: LocationSharingSheetProps) {
+export function LocationSharingSheet({ open, onClose, isShared, onToggleSharing }: LocationSharingSheetProps) {
   const [friends, setFriends] = useState<Friend[]>(mockFriends)
-  const [isLocationSharingEnabled, setIsLocationSharingEnabled] = useState(true)
+  const [isLocationSharingEnabled, setIsLocationSharingEnabled] = useState(isShared)
   const [shareWithAll, setShareWithAll] = useState(false)
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
 
-  // Memoize the callback to prevent infinite re-renders
-  const updateFriendsLocation = useCallback(() => {
-    const friendsWithLoc = friends
-      .filter((f) => f.location && f.iCanSeeLocation)
-      .map((f) => ({
-        name: f.name,
-        avatar: f.avatar,
-        lat: f.location!.lat,
-        lng: f.location!.lng,
-        activity: `En ligne - ${f.location!.address}`,
-        lastUpdated: f.location!.lastUpdated,
-      }))
-    onFriendsLocationUpdate(friendsWithLoc)
-  }, [friends, onFriendsLocationUpdate])
-
-  // Update parent component with friends location data only when friends array changes
+  // Get user's location
   useEffect(() => {
-    updateFriendsLocation()
-  }, [updateFriendsLocation])
-
-  const toggleLocationSharing = useCallback((enabled: boolean) => {
-    setIsLocationSharingEnabled(enabled)
-    if (!enabled) {
-      // Stop sharing with all friends
-      setFriends((prev) =>
-        prev.map((friend) => ({
-          ...friend,
-          sharingWithMe: false,
-        })),
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          setUserLocation({
+            lat: position.coords.latitude,
+            lng: position.coords.longitude,
+          })
+        },
+        (error) => {
+          console.error("Error getting location:", error)
+          // Default to Paris center if geolocation fails
+          setUserLocation({ lat: 48.8566, lng: 2.3522 })
+        },
       )
+    } else {
+      // Default to Paris center if geolocation is not supported
+      setUserLocation({ lat: 48.8566, lng: 2.3522 })
     }
   }, [])
 
+  const toggleLocationSharing = useCallback(
+    (enabled: boolean) => {
+      hapticFeedback.selection()
+      setIsLocationSharingEnabled(enabled)
+      onToggleSharing(enabled)
+      if (!enabled) {
+        // Stop sharing with all friends
+        setFriends((prev) =>
+          prev.map((friend) => ({
+            ...friend,
+            sharingWithMe: false,
+          })),
+        )
+      }
+    },
+    [onToggleSharing],
+  )
+
   const toggleShareWithFriend = useCallback((friendId: string, share: boolean) => {
+    hapticFeedback.selection()
     setFriends((prev) => prev.map((friend) => (friend.id === friendId ? { ...friend, sharingWithMe: share } : friend)))
   }, [])
 
   const toggleShareWithAll = useCallback(
     (shareAll: boolean) => {
+      hapticFeedback.selection()
       setShareWithAll(shareAll)
       if (isLocationSharingEnabled) {
         setFriends((prev) =>
@@ -162,6 +168,20 @@ export function LocationSharingSheet({
     return `Il y a ${hours}h`
   }, [])
 
+  const handleClose = () => {
+    hapticFeedback.sheetClose()
+    onClose()
+  }
+
+  const handleConfirm = () => {
+    hapticFeedback.success()
+    console.log(
+      "Location shared with:",
+      friends.filter((f) => f.sharingWithMe).map((f) => f.name),
+    )
+    onClose()
+  }
+
   const onlineFriends = friends.filter((f) => f.isOnline)
   const friendsWithLocation = friends.filter((f) => f.location && f.iCanSeeLocation)
 
@@ -174,7 +194,7 @@ export function LocationSharingSheet({
               <Share2 className="w-5 h-5 text-purple-500" />
               Partage de position
             </SheetTitle>
-            <Button variant="ghost" size="sm" onClick={onClose}>
+            <Button variant="ghost" size="sm" onClick={handleClose} haptic="tap">
               <X className="w-4 h-4" />
             </Button>
           </div>
@@ -182,7 +202,7 @@ export function LocationSharingSheet({
 
         <div className="space-y-6 py-6">
           {/* User Location Status */}
-          <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-100">
+          <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-100 animate-in fade-in-0 slide-in-from-top-2 duration-500 delay-100">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-semibold text-gray-900">Ma position</h3>
               <Badge variant={userLocation ? "default" : "secondary"} className={userLocation ? "bg-green-500" : ""}>
@@ -207,7 +227,7 @@ export function LocationSharingSheet({
 
           {/* Quick Share Options */}
           {isLocationSharingEnabled && userLocation && (
-            <div className="space-y-3">
+            <div className="space-y-3 animate-in fade-in-0 slide-in-from-top-2 duration-500 delay-200">
               <h3 className="font-semibold text-gray-900">Options rapides</h3>
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                 <Label htmlFor="share-all" className="text-sm font-medium">
@@ -219,7 +239,7 @@ export function LocationSharingSheet({
           )}
 
           {/* Friends List */}
-          <div className="space-y-4">
+          <div className="space-y-4 animate-in fade-in-0 slide-in-from-top-2 duration-500 delay-300">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-gray-900">Amis ({onlineFriends.length} en ligne)</h3>
               <Badge variant="outline" className="text-xs">
@@ -228,10 +248,11 @@ export function LocationSharingSheet({
             </div>
 
             <div className="space-y-3">
-              {friends.map((friend) => (
+              {friends.map((friend, index) => (
                 <div
                   key={friend.id}
-                  className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg"
+                  className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-lg hover:shadow-sm transition-all duration-200 animate-in fade-in-0 slide-in-from-left-2"
+                  style={{ animationDelay: `${400 + index * 50}ms` }}
                 >
                   <div className="flex items-center gap-3">
                     <div className="relative">
@@ -286,7 +307,7 @@ export function LocationSharingSheet({
           </div>
 
           {/* Privacy Notice */}
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg animate-in fade-in-0 slide-in-from-bottom-2 duration-500 delay-500">
             <h4 className="font-medium text-blue-900 mb-2">🔒 Confidentialité</h4>
             <ul className="text-sm text-blue-800 space-y-1">
               <li>• Votre position n'est partagée qu'avec les amis sélectionnés</li>
@@ -297,21 +318,15 @@ export function LocationSharingSheet({
           </div>
 
           {/* Action Buttons */}
-          <div className="flex gap-3 pt-4 border-t">
-            <Button variant="outline" onClick={onClose} className="flex-1 bg-transparent">
+          <div className="flex gap-3 pt-4 border-t animate-in fade-in-0 slide-in-from-bottom-2 duration-500 delay-600">
+            <Button variant="outline" onClick={handleClose} className="flex-1 bg-transparent" haptic="tap">
               Fermer
             </Button>
             <Button
-              onClick={() => {
-                // Simulate sharing location
-                console.log(
-                  "Location shared with:",
-                  friends.filter((f) => f.sharingWithMe).map((f) => f.name),
-                )
-                onClose()
-              }}
+              onClick={handleConfirm}
               className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500"
               disabled={!isLocationSharingEnabled || !userLocation}
+              haptic="success"
             >
               Confirmer
             </Button>

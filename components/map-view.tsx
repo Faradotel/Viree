@@ -10,6 +10,7 @@ import { LocationZoneControl } from "@/components/location-zone-control"
 import { NotificationManager } from "@/components/notification-manager"
 import { LeafletMap } from "@/components/leaflet-map"
 import { isWithinRadius } from "@/utils/distance"
+import { hapticFeedback } from "@/utils/haptics"
 
 const events = [
   {
@@ -111,6 +112,7 @@ export function MapView({ onEventSelect }: MapViewProps) {
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [friendsWithLocation, setFriendsWithLocation] = useState<any[]>([])
   const [searchRadius, setSearchRadius] = useState<number>(2) // Default 2km radius
+  const [isLocationShared, setIsLocationShared] = useState(false)
 
   // Memoize the location change handler to prevent re-renders
   const handleLocationChange = useCallback(
@@ -176,19 +178,26 @@ export function MapView({ onEventSelect }: MapViewProps) {
     }
   }, [userLocation, searchRadius])
 
+  const handleLocationSharingToggle = (shared: boolean) => {
+    hapticFeedback.success()
+    setIsLocationShared(shared)
+  }
+
   return (
     <div className="relative w-full h-full">
-      {/* Control Buttons */}
-      <div className="absolute top-4 right-4 z-10 flex gap-2">
+      {/* Control Buttons - Fixed on top with high z-index */}
+      <div className="absolute top-4 right-4 z-[100] flex gap-2">
         <Button
           onClick={() => {
+            hapticFeedback.tap()
             // Trigger geolocation in the map component
             const event = new CustomEvent("requestLocation")
             window.dispatchEvent(event)
           }}
-          className="bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white shadow-lg"
+          className="bg-white/95 backdrop-blur-sm text-gray-700 hover:bg-white shadow-lg border border-gray-200"
           size="sm"
           disabled={isLocating}
+          haptic="tap"
         >
           <MapPin className={`w-4 h-4 mr-2 ${isLocating ? "animate-pulse" : ""}`} />
           {isLocating ? "Localisation..." : "Ma position"}
@@ -210,9 +219,13 @@ export function MapView({ onEventSelect }: MapViewProps) {
         />
 
         <Button
-          onClick={() => setShowLocationSharing(true)}
-          className="bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white shadow-lg relative"
+          onClick={() => {
+            hapticFeedback.tap()
+            setShowLocationSharing(true)
+          }}
+          className="bg-white/95 backdrop-blur-sm text-gray-700 hover:bg-white shadow-lg border border-gray-200 relative"
           size="sm"
+          haptic="tap"
         >
           <Share2 className="w-4 h-4 mr-2" />
           Partager
@@ -221,33 +234,49 @@ export function MapView({ onEventSelect }: MapViewProps) {
               {activeFriendsCount}
             </Badge>
           )}
+          {isLocationShared && (
+            <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+          )}
         </Button>
 
         <Button
-          onClick={() => setShowFilters(true)}
-          className="bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white shadow-lg"
+          onClick={() => {
+            hapticFeedback.tap()
+            setShowFilters(true)
+          }}
+          className="bg-white/95 backdrop-blur-sm text-gray-700 hover:bg-white shadow-lg border border-gray-200"
           size="sm"
+          haptic="tap"
         >
           <Filter className="w-4 h-4 mr-2" />
           Filtres
+          {selectedFilters.length > 0 && (
+            <Badge className="absolute -top-2 -right-2 bg-purple-500 text-white text-xs w-5 h-5 rounded-full p-0 flex items-center justify-center">
+              {selectedFilters.length}
+            </Badge>
+          )}
         </Button>
       </div>
 
-      {/* Active Filters */}
+      {/* Active Filters - Fixed on top */}
       {selectedFilters.length > 0 && (
-        <div className="absolute top-16 right-4 z-10 flex flex-wrap gap-2 max-w-48">
+        <div className="absolute top-16 right-4 z-[100] flex flex-wrap gap-2 max-w-48">
           {selectedFilters.map((filter) => (
-            <Badge key={filter} variant="secondary" className="bg-white/90 backdrop-blur-sm">
+            <Badge
+              key={filter}
+              variant="secondary"
+              className="bg-white/95 backdrop-blur-sm shadow-sm border border-gray-200"
+            >
               {filter}
             </Badge>
           ))}
         </div>
       )}
 
-      {/* Status Messages */}
-      <div className="absolute top-4 left-4 z-10 space-y-2">
+      {/* Status Messages - Fixed on top */}
+      <div className="absolute top-4 left-4 z-[100] space-y-2">
         {/* OpenStreetMap Notice */}
-        <div className="bg-green-100 border border-green-300 rounded-lg p-3 max-w-sm">
+        <div className="bg-green-100/95 backdrop-blur-sm border border-green-300 rounded-lg p-3 max-w-sm shadow-sm">
           <p className="text-sm text-green-800">
             <strong>🌍 OpenStreetMap:</strong> Carte libre et gratuite!
           </p>
@@ -255,7 +284,7 @@ export function MapView({ onEventSelect }: MapViewProps) {
 
         {/* Location Error */}
         {locationError && (
-          <div className="bg-red-100 border border-red-300 rounded-lg p-3 max-w-sm">
+          <div className="bg-red-100/95 backdrop-blur-sm border border-red-300 rounded-lg p-3 max-w-sm shadow-sm">
             <p className="text-sm text-red-800">
               <strong>⚠️ Erreur:</strong> {locationError}
             </p>
@@ -264,7 +293,7 @@ export function MapView({ onEventSelect }: MapViewProps) {
 
         {/* Zone Status */}
         {userLocation && (
-          <div className="bg-purple-100 border border-purple-300 rounded-lg p-3 max-w-sm">
+          <div className="bg-purple-100/95 backdrop-blur-sm border border-purple-300 rounded-lg p-3 max-w-sm shadow-sm">
             <p className="text-sm text-purple-800">
               <strong>📍 Zone active:</strong> {searchRadius < 1 ? `${searchRadius * 1000}m` : `${searchRadius}km`}
             </p>
@@ -278,7 +307,7 @@ export function MapView({ onEventSelect }: MapViewProps) {
 
         {/* Friends Location Status */}
         {activeFriendsCount > 0 && (
-          <div className="bg-blue-100 border border-blue-300 rounded-lg p-3 max-w-sm">
+          <div className="bg-blue-100/95 backdrop-blur-sm border border-blue-300 rounded-lg p-3 max-w-sm shadow-sm">
             <p className="text-sm text-blue-800">
               <strong>
                 👥 {activeFriendsCount} ami{activeFriendsCount > 1 ? "s" : ""}
@@ -289,15 +318,17 @@ export function MapView({ onEventSelect }: MapViewProps) {
         )}
       </div>
 
-      {/* Leaflet Map */}
-      <LeafletMap
-        events={locationFilteredEvents}
-        friends={locationFilteredFriends}
-        onEventSelect={onEventSelect}
-        onLocationChange={handleLocationChange}
-        userLocation={userLocation}
-        searchRadius={searchRadius}
-      />
+      {/* Leaflet Map - Lower z-index */}
+      <div className="absolute inset-0 z-0">
+        <LeafletMap
+          events={locationFilteredEvents}
+          friends={locationFilteredFriends}
+          onEventSelect={onEventSelect}
+          onLocationChange={handleLocationChange}
+          userLocation={userLocation}
+          searchRadius={searchRadius}
+        />
+      </div>
 
       {/* Filter Sheet */}
       <FilterSheet
@@ -311,8 +342,8 @@ export function MapView({ onEventSelect }: MapViewProps) {
       <LocationSharingSheet
         open={showLocationSharing}
         onClose={() => setShowLocationSharing(false)}
-        userLocation={userLocation}
-        onFriendsLocationUpdate={handleFriendsLocationUpdate}
+        isShared={isLocationShared}
+        onToggleSharing={handleLocationSharingToggle}
       />
     </div>
   )

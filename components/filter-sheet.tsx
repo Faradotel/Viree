@@ -5,6 +5,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Music, Coffee, Palette, Users, X } from "lucide-react"
+import { hapticFeedback } from "@/utils/haptics"
 
 const filterOptions = [
   { id: "music", label: "Concerts & Musique", icon: Music, color: "text-purple-500" },
@@ -29,7 +30,13 @@ export function FilterSheet({ open, onClose, selectedFilters, onFiltersChange }:
   }
 
   const clearFilters = () => {
+    hapticFeedback.impact()
     onFiltersChange([])
+  }
+
+  const applyFilters = () => {
+    hapticFeedback.success()
+    onClose()
   }
 
   return (
@@ -42,6 +49,7 @@ export function FilterSheet({ open, onClose, selectedFilters, onFiltersChange }:
               variant="ghost"
               size="sm"
               onClick={onClose}
+              haptic="tap"
               className="hover:bg-gray-100 transition-colors duration-200"
             >
               <X className="w-4 h-4" />
@@ -70,6 +78,7 @@ export function FilterSheet({ open, onClose, selectedFilters, onFiltersChange }:
                     <Label
                       htmlFor={option.id}
                       className="flex items-center gap-3 cursor-pointer flex-1 hover:text-gray-900 transition-colors duration-200"
+                      onClick={() => hapticFeedback.selection()}
                     >
                       <IconComponent
                         className={`w-5 h-5 ${option.color} transition-transform duration-200 hover:scale-110`}
@@ -86,12 +95,14 @@ export function FilterSheet({ open, onClose, selectedFilters, onFiltersChange }:
             <Button
               variant="outline"
               onClick={clearFilters}
+              haptic="impact"
               className="flex-1 bg-transparent hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-all duration-200 hover:scale-[1.02]"
             >
               Effacer tout
             </Button>
             <Button
-              onClick={onClose}
+              onClick={applyFilters}
+              haptic="success"
               className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg"
             >
               Appliquer ({selectedFilters.length})

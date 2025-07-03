@@ -4,90 +4,98 @@ import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { Music, Coffee, Palette, Users, MapPin, Clock, Euro, Filter } from "lucide-react"
 import { FilterSheet } from "@/components/filter-sheet"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Clock, MapPin, Users, Heart, Share2, SlidersHorizontal } from "lucide-react"
 import { isWithinRadius } from "@/utils/distance"
+import { hapticFeedback } from "@/utils/haptics"
 
 const events = [
   {
     id: 1,
     name: "Apéro DJ Canal",
+    type: "Bars & Social",
+    category: "social",
     location: "Canal Saint-Martin",
-    time: "18h30",
+    time: "18h30 - 22h00",
     price: "Gratuit",
-    category: "music",
-    type: "Concert",
-    description: "DJ set au bord du canal avec vue sur les péniches",
     attendees: 45,
-    friends: ["Paul", "Marie"],
-    image: "/placeholder.svg?height=200&width=300",
     isNow: true,
-    lat: 48.864716,
-    lng: 2.369465,
+    lat: 48.8708,
+    lng: 2.3659,
+    image: "/placeholder.svg?height=200&width=400",
+    description:
+      "Venez profiter d'un apéro décontracté au bord du canal avec de la musique électronique et une ambiance conviviale.",
+    friends: ["Marie", "Paul"],
   },
   {
     id: 2,
     name: "Expo Street Art",
-    location: "Galerie Perrotin",
-    time: "19h00",
-    price: "12€",
+    type: "Art & Expositions",
     category: "art",
-    type: "Exposition",
-    description: "Nouvelle exposition d'artistes urbains émergents",
+    location: "Belleville",
+    time: "14h00 - 20h00",
+    price: "8€",
     attendees: 23,
-    friends: ["Sophie"],
-    image: "/placeholder.svg?height=200&width=300",
     isNow: false,
-    lat: 48.856614,
-    lng: 2.360352,
+    lat: 48.8722,
+    lng: 2.3767,
+    image: "/placeholder.svg?height=200&width=400",
+    description:
+      "Découvrez les œuvres des artistes locaux dans cette exposition temporaire dédiée au street art parisien.",
+    friends: ["Sophie"],
   },
   {
     id: 3,
-    name: "Quiz Night",
-    location: "The Frog & Rosbif",
-    time: "20h00",
-    price: "5€",
-    category: "social",
-    type: "Bar",
-    description: "Soirée quiz en anglais avec prix à gagner",
-    attendees: 67,
-    friends: [],
-    image: "/placeholder.svg?height=200&width=300",
+    name: "Coffee Cupping",
+    type: "Café & Dégustation",
+    category: "coffee",
+    location: "Le Marais",
+    time: "10h00 - 12h00",
+    price: "15€",
+    attendees: 12,
     isNow: false,
-    lat: 48.869875,
-    lng: 2.342097,
+    lat: 48.8566,
+    lng: 2.3522,
+    image: "/placeholder.svg?height=200&width=400",
+    description:
+      "Séance de dégustation de cafés d'exception avec un barista professionnel. Apprenez à distinguer les arômes.",
+    friends: [],
   },
   {
     id: 4,
-    name: "Coffee Cupping",
-    location: "Lomi Coffee",
-    time: "17h00",
-    price: "8€",
-    category: "coffee",
-    type: "Dégustation",
-    description: "Dégustation de cafés de spécialité avec barista",
-    attendees: 12,
-    friends: ["Alex", "Tom"],
-    image: "/placeholder.svg?height=200&width=300",
-    isNow: true,
-    lat: 48.886745,
-    lng: 2.344286,
+    name: "Concert Jazz",
+    type: "Concerts & Musique",
+    category: "music",
+    location: "Saint-Germain",
+    time: "21h00 - 23h30",
+    price: "25€",
+    attendees: 67,
+    isNow: false,
+    lat: 48.8534,
+    lng: 2.3488,
+    image: "/placeholder.svg?height=200&width=400",
+    description: "Soirée jazz intimiste dans un club historique avec des musiciens renommés de la scène parisienne.",
+    friends: ["Tom", "Alice"],
+  },
+  {
+    id: 5,
+    name: "Quiz Night",
+    type: "Bars & Social",
+    category: "social",
+    location: "République",
+    time: "19h00 - 22h00",
+    price: "5€",
+    attendees: 34,
+    isNow: false,
+    lat: 48.8676,
+    lng: 2.3639,
+    image: "/placeholder.svg?height=200&width=400",
+    description:
+      "Soirée quiz entre amis dans une ambiance décontractée. Formez votre équipe et tentez de remporter le prix !",
+    friends: ["Marie"],
   },
 ]
-
-const categoryIcons = {
-  music: Music,
-  art: Palette,
-  social: Users,
-  coffee: Coffee,
-}
-
-const categoryColors = {
-  music: "from-purple-500 to-pink-500",
-  art: "from-orange-500 to-red-500",
-  social: "from-blue-500 to-cyan-500",
-  coffee: "from-amber-500 to-orange-500",
-}
 
 interface EventFeedProps {
   onEventSelect: (event: any) => void
@@ -104,14 +112,15 @@ export function EventFeed({
   selectedFilters,
   onFiltersChange,
 }: EventFeedProps) {
+  const [sortBy, setSortBy] = useState<"time" | "distance" | "popular">("time")
   const [showFilters, setShowFilters] = useState(false)
-  const [sortBy, setSortBy] = useState<"now" | "popular" | "nearby">("now")
 
   // Filter events by category
-  const categoryFilteredEvents =
-    selectedFilters.length > 0 ? events.filter((event) => selectedFilters.includes(event.category)) : events
+  const categoryFilteredEvents = useMemo(() => {
+    return selectedFilters.length > 0 ? events.filter((event) => selectedFilters.includes(event.category)) : events
+  }, [selectedFilters])
 
-  // Filter events by location radius (same as map)
+  // Filter events by location radius
   const locationFilteredEvents = useMemo(() => {
     if (!userLocation) {
       return categoryFilteredEvents
@@ -122,153 +131,248 @@ export function EventFeed({
     )
   }, [categoryFilteredEvents, userLocation, searchRadius])
 
-  const sortedEvents = [...locationFilteredEvents].sort((a, b) => {
-    if (sortBy === "now") return b.isNow ? 1 : -1
-    if (sortBy === "popular") return b.attendees - a.attendees
-    if (sortBy === "nearby" && userLocation) {
-      const distanceA = isWithinRadius(userLocation.lat, userLocation.lng, a.lat, a.lng, searchRadius) ? 0 : 1
-      const distanceB = isWithinRadius(userLocation.lat, userLocation.lng, b.lat, b.lng, searchRadius) ? 0 : 1
-      return distanceA - distanceB
+  // Sort events
+  const sortedEvents = useMemo(() => {
+    const eventsWithDistance = locationFilteredEvents.map((event) => ({
+      ...event,
+      distance: userLocation
+        ? (isWithinRadius(userLocation.lat, userLocation.lng, event.lat, event.lng, searchRadius, true) as number)
+        : 0,
+    }))
+
+    switch (sortBy) {
+      case "distance":
+        return eventsWithDistance.sort((a, b) => a.distance - b.distance)
+      case "popular":
+        return eventsWithDistance.sort((a, b) => b.attendees - a.attendees)
+      case "time":
+      default:
+        return eventsWithDistance.sort((a, b) => {
+          if (a.isNow && !b.isNow) return -1
+          if (!a.isNow && b.isNow) return 1
+          return 0
+        })
     }
-    return 0
-  })
+  }, [locationFilteredEvents, sortBy, userLocation, searchRadius])
+
+  const handleEventClick = (event: any) => {
+    hapticFeedback.press()
+    onEventSelect(event)
+  }
+
+  const handleSortChange = (newSort: "time" | "distance" | "popular") => {
+    hapticFeedback.selection()
+    setSortBy(newSort)
+  }
+
+  const handleFiltersOpen = () => {
+    hapticFeedback.tap()
+    setShowFilters(true)
+  }
 
   return (
-    <div className="h-full flex flex-col">
-      {/* Header */}
-      <div className="bg-white/90 backdrop-blur-sm border-b border-purple-100 p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-semibold text-gray-900">Événements</h2>
-          <Button onClick={() => setShowFilters(true)} variant="outline" size="sm">
-            <Filter className="w-4 h-4 mr-2" />
+    <div className="flex flex-col h-full bg-gray-50">
+      {/* Header Controls */}
+      <div className="bg-white border-b border-gray-200 p-4 space-y-4">
+        {/* Sort Options */}
+        <div className="flex items-center justify-between">
+          <div className="flex bg-gray-100 rounded-lg p-1">
+            <Button
+              variant={sortBy === "time" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => handleSortChange("time")}
+              className={`${
+                sortBy === "time" ? "bg-white shadow-sm text-gray-900" : "text-gray-600 hover:text-gray-900"
+              } transition-all duration-200`}
+              haptic="selection"
+            >
+              Maintenant
+            </Button>
+            <Button
+              variant={sortBy === "popular" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => handleSortChange("popular")}
+              className={`${
+                sortBy === "popular" ? "bg-white shadow-sm text-gray-900" : "text-gray-600 hover:text-gray-900"
+              } transition-all duration-200`}
+              haptic="selection"
+            >
+              Populaires
+            </Button>
+            {userLocation && (
+              <Button
+                variant={sortBy === "distance" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => handleSortChange("distance")}
+                className={`${
+                  sortBy === "distance" ? "bg-white shadow-sm text-gray-900" : "text-gray-600 hover:text-gray-900"
+                } transition-all duration-200`}
+                haptic="selection"
+              >
+                Près de moi
+              </Button>
+            )}
+          </div>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleFiltersOpen}
+            className="bg-white hover:bg-purple-50 hover:border-purple-200 transition-colors duration-200"
+            haptic="tap"
+          >
+            <SlidersHorizontal className="w-4 h-4 mr-2" />
             Filtres
-          </Button>
-        </div>
-
-        {/* Sort Buttons */}
-        <div className="flex gap-2">
-          <Button
-            variant={sortBy === "now" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSortBy("now")}
-            className={sortBy === "now" ? "bg-gradient-to-r from-purple-500 to-pink-500" : ""}
-          >
-            Maintenant
-          </Button>
-          <Button
-            variant={sortBy === "popular" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSortBy("popular")}
-            className={sortBy === "popular" ? "bg-gradient-to-r from-purple-500 to-pink-500" : ""}
-          >
-            Populaires
-          </Button>
-          <Button
-            variant={sortBy === "nearby" ? "default" : "outline"}
-            size="sm"
-            onClick={() => setSortBy("nearby")}
-            className={sortBy === "nearby" ? "bg-gradient-to-r from-purple-500 to-pink-500" : ""}
-          >
-            Près de moi
-          </Button>
-        </div>
-
-        {/* Location Status */}
-        {userLocation && (
-          <div className="mt-3 p-2 bg-purple-50 rounded-lg border border-purple-200">
-            <p className="text-sm text-purple-800">
-              <strong>📍 Zone active:</strong> {searchRadius < 1 ? `${searchRadius * 1000}m` : `${searchRadius}km`}
-            </p>
-            <p className="text-xs text-purple-600">
-              {locationFilteredEvents.length} événement{locationFilteredEvents.length !== 1 ? "s" : ""} dans votre zone
-              {categoryFilteredEvents.length > locationFilteredEvents.length &&
-                ` (${categoryFilteredEvents.length - locationFilteredEvents.length} hors zone)`}
-            </p>
-          </div>
-        )}
-
-        {!userLocation && (
-          <div className="mt-3 p-2 bg-amber-50 rounded-lg border border-amber-200">
-            <p className="text-sm text-amber-800">⚠️ Activez votre géolocalisation pour filtrer par zone</p>
-          </div>
-        )}
-
-        {/* Active Filters */}
-        {selectedFilters.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-3">
-            {selectedFilters.map((filter) => (
-              <Badge key={filter} variant="secondary">
-                {filter}
+            {selectedFilters.length > 0 && (
+              <Badge variant="secondary" className="ml-2 bg-purple-100 text-purple-700">
+                {selectedFilters.length}
               </Badge>
-            ))}
+            )}
+          </Button>
+        </div>
+
+        {/* Zone Status */}
+        {userLocation && (
+          <div className="flex items-center justify-between text-sm">
+            <div className="flex items-center gap-2 text-gray-600">
+              <MapPin className="w-4 h-4" />
+              <span>
+                Zone: {searchRadius < 1 ? `${searchRadius * 1000}m` : `${searchRadius}km`} • {sortedEvents.length}{" "}
+                événement{sortedEvents.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+            {selectedFilters.length > 0 && (
+              <Badge variant="outline" className="text-xs">
+                Filtré par {selectedFilters.length} catégorie{selectedFilters.length > 1 ? "s" : ""}
+              </Badge>
+            )}
           </div>
         )}
       </div>
 
       {/* Events List */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {sortedEvents.map((event) => {
-          const IconComponent = categoryIcons[event.category as keyof typeof categoryIcons]
-          const colorClass = categoryColors[event.category as keyof typeof categoryColors]
-
-          return (
+        {sortedEvents.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+              <MapPin className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Aucun événement trouvé</h3>
+            <p className="text-gray-600 mb-4">
+              {!userLocation
+                ? "Activez votre géolocalisation pour voir les événements près de vous"
+                : selectedFilters.length > 0
+                  ? "Essayez de modifier vos filtres ou d'agrandir votre zone de recherche"
+                  : "Aucun événement dans votre zone actuellement"}
+            </p>
+            {selectedFilters.length > 0 && (
+              <Button variant="outline" onClick={() => onFiltersChange([])} haptic="tap">
+                Effacer les filtres
+              </Button>
+            )}
+          </div>
+        ) : (
+          sortedEvents.map((event, index) => (
             <Card
               key={event.id}
-              className="overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200 transform hover:-translate-y-1"
-              onClick={() => onEventSelect(event)}
+              className="cursor-pointer hover:shadow-md transition-all duration-200 hover:scale-[1.02] bg-white border border-gray-200"
+              onClick={() => handleEventClick(event)}
             >
-              <div className="relative">
-                <img src={event.image || "/placeholder.svg"} alt={event.name} className="w-full h-48 object-cover" />
-                {event.isNow && (
-                  <Badge className="absolute top-2 left-2 bg-gradient-to-r from-green-500 to-emerald-500 animate-pulse">
-                    En cours
-                  </Badge>
-                )}
-                <div
-                  className={`absolute top-2 right-2 w-10 h-10 bg-gradient-to-r ${colorClass} rounded-full flex items-center justify-center`}
-                >
-                  <IconComponent className="w-5 h-5 text-white" />
-                </div>
-              </div>
-
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between mb-2">
-                  <h3 className="font-semibold text-lg text-gray-900">{event.name}</h3>
-                  <Badge variant="outline">{event.type}</Badge>
+              <CardContent className="p-0">
+                <div className="relative">
+                  <img
+                    src={event.image || "/placeholder.svg"}
+                    alt={event.name}
+                    className="w-full h-48 object-cover rounded-t-lg"
+                  />
+                  {event.isNow && (
+                    <Badge className="absolute top-3 left-3 bg-red-500 text-white animate-pulse">En cours</Badge>
+                  )}
+                  <Badge className="absolute top-3 right-3 bg-white/90 text-gray-700">{event.type}</Badge>
+                  {userLocation && (
+                    <Badge className="absolute bottom-3 right-3 bg-black/70 text-white">
+                      {event.distance.toFixed(1)}km
+                    </Badge>
+                  )}
                 </div>
 
-                <p className="text-gray-600 text-sm mb-3">{event.description}</p>
+                <div className="p-4 space-y-3">
+                  <div>
+                    <h3 className="font-bold text-lg text-gray-900 mb-1">{event.name}</h3>
+                    <p className="text-gray-600 text-sm line-clamp-2">{event.description}</p>
+                  </div>
 
-                <div className="space-y-2 mb-3">
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <MapPin className="w-4 h-4" />
-                    {event.location}
+                  <div className="flex items-center gap-4 text-sm text-gray-600">
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-4 h-4" />
+                      <span>{event.time}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <MapPin className="w-4 h-4" />
+                      <span>{event.location}</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Clock className="w-4 h-4" />
-                    {event.time}
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Euro className="w-4 h-4" />
-                    {event.price}
-                  </div>
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-500">{event.attendees} participants</span>
-                    {event.friends.length > 0 && (
-                      <span className="text-sm text-purple-600 font-medium">• {event.friends.join(", ")} y vont</span>
-                    )}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <span className="font-semibold text-purple-600">{event.price}</span>
+                      <div className="flex items-center gap-1 text-sm text-gray-600">
+                        <Users className="w-4 h-4" />
+                        <span>{event.attendees}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {event.friends.length > 0 && (
+                        <div className="flex items-center gap-1">
+                          <div className="flex -space-x-2">
+                            {event.friends.slice(0, 3).map((friend, i) => (
+                              <Avatar key={i} className="w-6 h-6 border-2 border-white">
+                                <AvatarFallback className="text-xs bg-gradient-to-r from-purple-500 to-pink-500 text-white">
+                                  {friend[0]}
+                                </AvatarFallback>
+                              </Avatar>
+                            ))}
+                          </div>
+                          <span className="text-xs text-gray-600 ml-1">
+                            {event.friends.length} ami{event.friends.length > 1 ? "s" : ""}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            hapticFeedback.tap()
+                          }}
+                          haptic="tap"
+                        >
+                          <Heart className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 hover:bg-blue-50 hover:text-blue-600"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            hapticFeedback.tap()
+                          }}
+                          haptic="tap"
+                        >
+                          <Share2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
                   </div>
-                  <Button size="sm" className="bg-gradient-to-r from-purple-500 to-pink-500">
-                    Voir +
-                  </Button>
                 </div>
               </CardContent>
             </Card>
-          )
-        })}
+          ))
+        )}
       </div>
 
       {/* Filter Sheet */}
