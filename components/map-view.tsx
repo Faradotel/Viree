@@ -1,13 +1,14 @@
 "use client"
 
-import { useState, useCallback, useMemo, useEffect } from "react"
+import { useState, useCallback, useMemo } from "react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Filter, MapPin, Share2 } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Slider } from "@/components/ui/slider"
+import { Share2, Plus, List, Search, X, Target } from "lucide-react"
 import { FilterSheet } from "@/components/filter-sheet"
 import { LocationSharingSheet } from "@/components/location-sharing-sheet"
-import { LocationZoneControl } from "@/components/location-zone-control"
-import { NotificationManager } from "@/components/notification-manager"
+import { AddEventSheet } from "@/components/add-event-sheet"
+import { EventListSheet } from "@/components/event-list-sheet"
 import { LeafletMap } from "@/components/leaflet-map"
 import { isWithinRadius } from "@/utils/distance"
 import { hapticFeedback } from "@/utils/haptics"
@@ -26,6 +27,9 @@ const events = [
     friends: ["Paul", "Marie"],
     lat: 48.8708,
     lng: 2.3628,
+    isFree: true,
+    isNow: true,
+    image: "/placeholder.svg?height=200&width=400",
   },
   {
     id: 2,
@@ -40,6 +44,9 @@ const events = [
     friends: ["Sophie"],
     lat: 48.8606,
     lng: 2.3522,
+    isFree: false,
+    isNow: false,
+    image: "/placeholder.svg?height=200&width=400",
   },
   {
     id: 3,
@@ -54,6 +61,9 @@ const events = [
     friends: [],
     lat: 48.8566,
     lng: 2.3522,
+    isFree: false,
+    isNow: false,
+    image: "/placeholder.svg?height=200&width=400",
   },
   {
     id: 4,
@@ -68,6 +78,9 @@ const events = [
     friends: ["Alex", "Tom"],
     lat: 48.8584,
     lng: 2.3761,
+    isFree: false,
+    isNow: true,
+    image: "/placeholder.svg?height=200&width=400",
   },
   {
     id: 5,
@@ -82,13 +95,16 @@ const events = [
     friends: [],
     lat: 48.8867,
     lng: 2.3431,
+    isFree: false,
+    isNow: false,
+    image: "/placeholder.svg?height=200&width=400",
   },
   {
     id: 6,
     name: "Jazz Session",
     location: "Le Procope",
     time: "20h30",
-    price: "8€",
+    price: "Gratuit",
     category: "music",
     type: "Concert",
     description: "Session jazz dans un cadre historique",
@@ -96,7 +112,23 @@ const events = [
     friends: ["Marie"],
     lat: 48.8534,
     lng: 2.3387,
+    isFree: true,
+    isNow: false,
+    image: "/placeholder.svg?height=200&width=400",
   },
+]
+
+const categoryFilters = [
+  { id: "music", icon: "🎵", label: "Musique", color: "#8b5cf6" },
+  { id: "social", icon: "🍻", label: "Bar/Soirée", color: "#3b82f6" },
+  { id: "art", icon: "🎨", label: "Art/Expo", color: "#ec4899" },
+  { id: "coffee", icon: "☕", label: "Café", color: "#f59e0b" },
+]
+
+const timeFilters = [
+  { id: "now", label: "Maintenant", value: 0 },
+  { id: "tonight", label: "Ce soir", value: 1 },
+  { id: "tomorrow", label: "Demain", value: 2 },
 ]
 
 interface MapViewProps {
@@ -104,17 +136,22 @@ interface MapViewProps {
 }
 
 export function MapView({ onEventSelect }: MapViewProps) {
-  const [selectedFilters, setSelectedFilters] = useState<string[]>([])
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [selectedTime, setSelectedTime] = useState<number>(0)
+  const [showFreeOnly, setShowFreeOnly] = useState(false)
   const [showFilters, setShowFilters] = useState(false)
   const [showLocationSharing, setShowLocationSharing] = useState(false)
+  const [showAddEvent, setShowAddEvent] = useState(false)
+  const [showEventList, setShowEventList] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [showSearch, setShowSearch] = useState(false)
   const [isLocating, setIsLocating] = useState(false)
   const [locationError, setLocationError] = useState<string | null>(null)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [friendsWithLocation, setFriendsWithLocation] = useState<any[]>([])
-  const [searchRadius, setSearchRadius] = useState<number>(2) // Default 2km radius
-  const [isLocationShared, setIsLocationShared] = useState(false)
+  const [searchRadius, setSearchRadius] = useState<number>(2)
 
-  // Memoize the location change handler to prevent re-renders
+  // Memoize the location change handler
   const handleLocationChange = useCallback(
     (locating: boolean, error: string | null, location?: { lat: number; lng: number }) => {
       setIsLocating(locating)
@@ -126,224 +163,289 @@ export function MapView({ onEventSelect }: MapViewProps) {
     [],
   )
 
-  // Memoize the friends location update handler to prevent infinite re-renders
-  const handleFriendsLocationUpdate = useCallback((friends: any[]) => {
-    setFriendsWithLocation(friends)
-  }, [])
+  // Filter events based on all criteria
+  const filteredEvents = useMemo(() => {
+    let filtered = events
 
-  // Handle new event alerts from notification manager
-  const handleNewEventAlert = useCallback((event: any) => {
-    // You could add additional logic here, like highlighting the new event
-    console.log("New event alert:", event.name)
-  }, [])
-
-  // Filter events by category
-  const categoryFilteredEvents = useMemo(() => {
-    return selectedFilters.length > 0 ? events.filter((event) => selectedFilters.includes(event.category)) : events
-  }, [selectedFilters])
-
-  // Filter events by location radius
-  const locationFilteredEvents = useMemo(() => {
-    if (!userLocation) {
-      return categoryFilteredEvents
+    // Filter by categories
+    if (selectedCategories.length > 0) {
+      filtered = filtered.filter((event) => selectedCategories.includes(event.category))
     }
 
-    return categoryFilteredEvents.filter((event) =>
-      isWithinRadius(userLocation.lat, userLocation.lng, event.lat, event.lng, searchRadius),
+    // Filter by free events
+    if (showFreeOnly) {
+      filtered = filtered.filter((event) => event.isFree)
+    }
+
+    // Filter by time
+    if (selectedTime === 0) {
+      filtered = filtered.filter((event) => event.isNow)
+    }
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(
+        (event) =>
+          event.name.toLowerCase().includes(query) ||
+          event.location.toLowerCase().includes(query) ||
+          event.description.toLowerCase().includes(query),
+      )
+    }
+
+    // Filter by location radius
+    if (userLocation) {
+      filtered = filtered.filter((event) =>
+        isWithinRadius(userLocation.lat, userLocation.lng, event.lat, event.lng, searchRadius),
+      )
+    }
+
+    return filtered
+  }, [selectedCategories, showFreeOnly, selectedTime, searchQuery, userLocation, searchRadius])
+
+  const handleCategoryToggle = (categoryId: string) => {
+    hapticFeedback.selection()
+    setSelectedCategories((prev) =>
+      prev.includes(categoryId) ? prev.filter((id) => id !== categoryId) : [...prev, categoryId],
     )
-  }, [categoryFilteredEvents, userLocation, searchRadius])
+  }
 
-  // Filter friends by location radius
-  const locationFilteredFriends = useMemo(() => {
-    if (!userLocation) {
-      return friendsWithLocation
+  const handleRecenterMap = () => {
+    hapticFeedback.tap()
+    const event = new CustomEvent("requestLocation")
+    window.dispatchEvent(event)
+  }
+
+  const handleAddEvent = () => {
+    hapticFeedback.press()
+    setShowAddEvent(true)
+  }
+
+  const handleToggleView = () => {
+    hapticFeedback.selection()
+    setShowEventList(true)
+  }
+
+  const handleSearchToggle = () => {
+    hapticFeedback.tap()
+    setShowSearch(!showSearch)
+    if (showSearch) {
+      setSearchQuery("")
     }
-
-    return friendsWithLocation.filter((friend) =>
-      isWithinRadius(userLocation.lat, userLocation.lng, friend.lat, friend.lng, searchRadius),
-    )
-  }, [friendsWithLocation, userLocation, searchRadius])
-
-  const activeFriendsCount = locationFilteredFriends.length
-  const eventsInZone = locationFilteredEvents.length
-  const totalEvents = categoryFilteredEvents.length
-
-  // Broadcast location updates to parent components
-  useEffect(() => {
-    if (userLocation && searchRadius) {
-      const event = new CustomEvent("locationUpdate", {
-        detail: { location: userLocation, radius: searchRadius },
-      })
-      window.dispatchEvent(event)
-    }
-  }, [userLocation, searchRadius])
-
-  const handleLocationSharingToggle = (shared: boolean) => {
-    hapticFeedback.success()
-    setIsLocationShared(shared)
   }
 
   return (
     <div className="relative w-full h-full">
-      {/* Control Buttons - Fixed on top with high z-index */}
-      <div className="absolute top-4 right-4 z-[100] flex gap-2">
-        <Button
-          onClick={() => {
-            hapticFeedback.tap()
-            // Trigger geolocation in the map component
-            const event = new CustomEvent("requestLocation")
-            window.dispatchEvent(event)
-          }}
-          className="bg-white/95 backdrop-blur-sm text-gray-700 hover:bg-white shadow-lg border border-gray-200"
-          size="sm"
-          disabled={isLocating}
-          haptic="tap"
-        >
-          <MapPin className={`w-4 h-4 mr-2 ${isLocating ? "animate-pulse" : ""}`} />
-          {isLocating ? "Localisation..." : "Ma position"}
-        </Button>
+      {/* Leaflet Map - Base Layer */}
+      <LeafletMap
+        events={filteredEvents}
+        friends={friendsWithLocation}
+        onEventSelect={onEventSelect}
+        onLocationChange={handleLocationChange}
+        userLocation={userLocation}
+        searchRadius={searchRadius}
+        enableClustering={true}
+      />
 
-        <LocationZoneControl
-          userLocation={userLocation}
-          searchRadius={searchRadius}
-          onRadiusChange={setSearchRadius}
-          eventsInZone={eventsInZone}
-          totalEvents={totalEvents}
-        />
-
-        <NotificationManager
-          userLocation={userLocation}
-          searchRadius={searchRadius}
-          allEvents={events}
-          onNewEventAlert={handleNewEventAlert}
-        />
-
-        <Button
-          onClick={() => {
-            hapticFeedback.tap()
-            setShowLocationSharing(true)
-          }}
-          className="bg-white/95 backdrop-blur-sm text-gray-700 hover:bg-white shadow-lg border border-gray-200 relative"
-          size="sm"
-          haptic="tap"
-        >
-          <Share2 className="w-4 h-4 mr-2" />
-          Partager
-          {activeFriendsCount > 0 && (
-            <Badge className="absolute -top-2 -right-2 bg-green-500 text-white text-xs w-5 h-5 rounded-full p-0 flex items-center justify-center">
-              {activeFriendsCount}
-            </Badge>
-          )}
-          {isLocationShared && (
-            <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-          )}
-        </Button>
-
-        <Button
-          onClick={() => {
-            hapticFeedback.tap()
-            setShowFilters(true)
-          }}
-          className="bg-white/95 backdrop-blur-sm text-gray-700 hover:bg-white shadow-lg border border-gray-200"
-          size="sm"
-          haptic="tap"
-        >
-          <Filter className="w-4 h-4 mr-2" />
-          Filtres
-          {selectedFilters.length > 0 && (
-            <Badge className="absolute -top-2 -right-2 bg-purple-500 text-white text-xs w-5 h-5 rounded-full p-0 flex items-center justify-center">
-              {selectedFilters.length}
-            </Badge>
-          )}
-        </Button>
-      </div>
-
-      {/* Active Filters - Fixed on top */}
-      {selectedFilters.length > 0 && (
-        <div className="absolute top-16 right-4 z-[100] flex flex-wrap gap-2 max-w-48">
-          {selectedFilters.map((filter) => (
-            <Badge
-              key={filter}
-              variant="secondary"
-              className="bg-white/95 backdrop-blur-sm shadow-sm border border-gray-200"
+      {/* Search Bar - Top Layer */}
+      {showSearch && (
+        <div className="absolute top-4 left-4 right-4 z-[1000] pointer-events-none">
+          <div className="flex gap-2 pointer-events-auto">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Input
+                placeholder="Rechercher un événement..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-4 h-11 bg-white/95 backdrop-blur-sm border border-gray-200 shadow-lg"
+              />
+            </div>
+            <Button
+              onClick={handleSearchToggle}
+              variant="outline"
+              size="icon"
+              className="bg-white/95 backdrop-blur-sm border border-gray-200 shadow-lg h-11 w-11"
+              haptic="tap"
             >
-              {filter}
-            </Badge>
-          ))}
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       )}
 
-      {/* Status Messages - Fixed on top */}
-      <div className="absolute top-4 left-4 z-[100] space-y-2">
-        {/* OpenStreetMap Notice */}
-        <div className="bg-green-100/95 backdrop-blur-sm border border-green-300 rounded-lg p-3 max-w-sm shadow-sm">
-          <p className="text-sm text-green-800">
-            <strong>🌍 OpenStreetMap:</strong> Carte libre et gratuite!
-          </p>
+      {/* Category Filters - Top Layer */}
+      <div className="absolute top-4 left-4 right-4 z-[1000] pointer-events-none">
+        <div className="flex flex-wrap gap-2 pointer-events-auto">
+          {categoryFilters.map((category) => (
+            <Button
+              key={category.id}
+              onClick={() => handleCategoryToggle(category.id)}
+              variant={selectedCategories.includes(category.id) ? "default" : "outline"}
+              size="sm"
+              className={`h-10 px-3 ${
+                selectedCategories.includes(category.id)
+                  ? "bg-white text-gray-900 shadow-lg border-2"
+                  : "bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white border border-gray-200"
+              } transition-all duration-200`}
+              style={{
+                borderColor: selectedCategories.includes(category.id) ? category.color : undefined,
+                backgroundColor: selectedCategories.includes(category.id) ? `${category.color}15` : undefined,
+              }}
+              haptic="selection"
+            >
+              <span className="text-lg mr-2">{category.icon}</span>
+              <span className="hidden sm:inline">{category.label}</span>
+            </Button>
+          ))}
+
+          {/* Free Filter */}
+          <Button
+            onClick={() => {
+              hapticFeedback.selection()
+              setShowFreeOnly(!showFreeOnly)
+            }}
+            variant={showFreeOnly ? "default" : "outline"}
+            size="sm"
+            className={`h-10 px-3 ${
+              showFreeOnly
+                ? "bg-green-100 text-green-800 border-2 border-green-500 shadow-lg"
+                : "bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white border border-gray-200"
+            } transition-all duration-200`}
+            haptic="selection"
+          >
+            <span className="text-lg mr-2">🆓</span>
+            <span className="hidden sm:inline">Gratuit</span>
+          </Button>
         </div>
+      </div>
 
-        {/* Location Error */}
+      {/* Time Filter Slider - Top Right Layer */}
+      <div className="absolute top-20 right-4 z-[1000] pointer-events-none">
+        <div className="bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg p-3 shadow-lg pointer-events-auto">
+          <div className="text-xs text-gray-600 mb-2 text-center">Moment</div>
+          <div className="w-32">
+            <Slider
+              value={[selectedTime]}
+              onValueChange={(value) => {
+                hapticFeedback.selection()
+                setSelectedTime(value[0])
+              }}
+              max={2}
+              step={1}
+              className="w-full"
+            />
+            <div className="flex justify-between text-xs text-gray-500 mt-1">
+              <span>Maintenant</span>
+              <span>Ce soir</span>
+              <span>Demain</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Map Controls - Right Side Layer */}
+      <div className="absolute top-32 right-4 z-[1000] flex flex-col gap-2 pointer-events-none">
+        {/* Recenter Button */}
+        <Button
+          onClick={handleRecenterMap}
+          variant="outline"
+          size="icon"
+          className="bg-white/95 backdrop-blur-sm border border-gray-200 shadow-lg h-11 w-11 pointer-events-auto"
+          disabled={isLocating}
+          haptic="tap"
+        >
+          <Target className={`w-5 h-5 ${isLocating ? "animate-pulse" : ""}`} />
+        </Button>
+
+        {/* Search Toggle */}
+        {!showSearch && (
+          <Button
+            onClick={handleSearchToggle}
+            variant="outline"
+            size="icon"
+            className="bg-white/95 backdrop-blur-sm border border-gray-200 shadow-lg h-11 w-11 pointer-events-auto"
+            haptic="tap"
+          >
+            <Search className="w-5 h-5" />
+          </Button>
+        )}
+
+        {/* List View Toggle */}
+        <Button
+          onClick={handleToggleView}
+          variant="outline"
+          size="icon"
+          className="bg-white/95 backdrop-blur-sm border border-gray-200 shadow-lg h-11 w-11 pointer-events-auto"
+          haptic="selection"
+        >
+          <List className="w-5 h-5" />
+        </Button>
+
+        {/* Share Location */}
+        <Button
+          onClick={() => setShowLocationSharing(true)}
+          variant="outline"
+          size="icon"
+          className="bg-white/95 backdrop-blur-sm border border-gray-200 shadow-lg h-11 w-11 pointer-events-auto"
+          haptic="tap"
+        >
+          <Share2 className="w-5 h-5" />
+        </Button>
+      </div>
+
+      {/* Add Event Button - Floating Layer */}
+      <div className="absolute bottom-24 right-4 z-[1000] pointer-events-none">
+        <Button
+          onClick={handleAddEvent}
+          size="lg"
+          className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-xl h-14 w-14 rounded-full pointer-events-auto transform hover:scale-105 transition-all duration-200"
+          haptic="press"
+        >
+          <Plus className="w-6 h-6" />
+        </Button>
+      </div>
+
+      {/* Status Messages - Bottom Left Layer */}
+      <div className="absolute bottom-24 left-4 z-[1000] space-y-2 pointer-events-none max-w-xs">
         {locationError && (
-          <div className="bg-red-100/95 backdrop-blur-sm border border-red-300 rounded-lg p-3 max-w-sm shadow-sm">
-            <p className="text-sm text-red-800">
-              <strong>⚠️ Erreur:</strong> {locationError}
-            </p>
+          <div className="bg-red-100/95 backdrop-blur-sm border border-red-300 rounded-lg p-2 shadow-sm pointer-events-auto">
+            <p className="text-xs text-red-800">⚠️ {locationError}</p>
           </div>
         )}
 
-        {/* Zone Status */}
         {userLocation && (
-          <div className="bg-purple-100/95 backdrop-blur-sm border border-purple-300 rounded-lg p-3 max-w-sm shadow-sm">
-            <p className="text-sm text-purple-800">
-              <strong>📍 Zone active:</strong> {searchRadius < 1 ? `${searchRadius * 1000}m` : `${searchRadius}km`}
-            </p>
-            <p className="text-xs text-purple-600 mt-1">
-              {eventsInZone} événement{eventsInZone !== 1 ? "s" : ""} dans la zone
-              {totalEvents > eventsInZone &&
-                ` (${totalEvents - eventsInZone} masqué${totalEvents - eventsInZone !== 1 ? "s" : ""})`}
-            </p>
-          </div>
-        )}
-
-        {/* Friends Location Status */}
-        {activeFriendsCount > 0 && (
-          <div className="bg-blue-100/95 backdrop-blur-sm border border-blue-300 rounded-lg p-3 max-w-sm shadow-sm">
-            <p className="text-sm text-blue-800">
-              <strong>
-                👥 {activeFriendsCount} ami{activeFriendsCount > 1 ? "s" : ""}
-              </strong>{" "}
-              dans la zone
+          <div className="bg-purple-100/95 backdrop-blur-sm border border-purple-300 rounded-lg p-2 shadow-sm pointer-events-auto">
+            <p className="text-xs text-purple-800">
+              📍 {filteredEvents.length} événement{filteredEvents.length !== 1 ? "s" : ""} dans{" "}
+              {searchRadius < 1 ? `${searchRadius * 1000}m` : `${searchRadius}km`}
             </p>
           </div>
         )}
       </div>
 
-      {/* Leaflet Map - Lower z-index */}
-      <div className="absolute inset-0 z-0">
-        <LeafletMap
-          events={locationFilteredEvents}
-          friends={locationFilteredFriends}
-          onEventSelect={onEventSelect}
-          onLocationChange={handleLocationChange}
-          userLocation={userLocation}
-          searchRadius={searchRadius}
-        />
-      </div>
-
-      {/* Filter Sheet */}
+      {/* Sheets - Top Layer */}
       <FilterSheet
         open={showFilters}
         onClose={() => setShowFilters(false)}
-        selectedFilters={selectedFilters}
-        onFiltersChange={setSelectedFilters}
+        selectedFilters={selectedCategories}
+        onFiltersChange={setSelectedCategories}
       />
 
-      {/* Location Sharing Sheet */}
       <LocationSharingSheet
         open={showLocationSharing}
         onClose={() => setShowLocationSharing(false)}
-        isShared={isLocationShared}
-        onToggleSharing={handleLocationSharingToggle}
+        userLocation={userLocation}
+        onFriendsLocationUpdate={(friends) => setFriendsWithLocation(friends)}
+      />
+
+      <AddEventSheet open={showAddEvent} onClose={() => setShowAddEvent(false)} userLocation={userLocation} />
+
+      <EventListSheet
+        open={showEventList}
+        onClose={() => setShowEventList(false)}
+        events={filteredEvents}
+        userLocation={userLocation}
+        onEventSelect={onEventSelect}
       />
     </div>
   )

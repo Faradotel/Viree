@@ -1,153 +1,138 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { MapView } from "@/components/map-view"
 import { EventFeed } from "@/components/event-feed"
-import { ProfileSheet } from "@/components/profile-sheet"
 import { EventSheet } from "@/components/event-sheet"
-import { LocationSharingSheet } from "@/components/location-sharing-sheet"
-import { Button } from "@/components/ui/button"
-import { Map, List, User, MapPin } from "lucide-react"
+import { ProfileSheet } from "@/components/profile-sheet"
+import { Map, List, User, Calendar } from "lucide-react"
 import { hapticFeedback } from "@/utils/haptics"
 
-export default function HomePage() {
-  const [activeView, setActiveView] = useState<"map" | "feed">("map")
-  const [selectedEvent, setSelectedEvent] = useState(null)
+export default function Home() {
+  const [selectedEvent, setSelectedEvent] = useState<any>(null)
   const [showProfile, setShowProfile] = useState(false)
-  const [showLocationSharing, setShowLocationSharing] = useState(false)
+  const [activeTab, setActiveTab] = useState("map")
+  const [selectedFilters, setSelectedFilters] = useState<string[]>([])
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const [searchRadius, setSearchRadius] = useState<number>(2)
-  const [selectedFilters, setSelectedFilters] = useState<string[]>([])
-  const [isLocationShared, setIsLocationShared] = useState(false)
-
-  useEffect(() => {
-    // Listen for location updates from MapView
-    const handleLocationUpdate = (event: CustomEvent) => {
-      setUserLocation(event.detail.location)
-      setSearchRadius(event.detail.radius)
-    }
-
-    window.addEventListener("locationUpdate", handleLocationUpdate as EventListener)
-
-    return () => {
-      window.removeEventListener("locationUpdate", handleLocationUpdate as EventListener)
-    }
-  }, [])
-
-  const handleViewChange = (view: "map" | "feed") => {
-    hapticFeedback.selection()
-    setActiveView(view)
-  }
-
-  const handleProfileOpen = () => {
-    hapticFeedback.press()
-    setShowProfile(true)
-  }
-
-  const handleLocationSharingOpen = () => {
-    hapticFeedback.tap()
-    setShowLocationSharing(true)
-  }
 
   const handleEventSelect = (event: any) => {
     hapticFeedback.press()
     setSelectedEvent(event)
   }
 
-  const handleLocationSharingToggle = (shared: boolean) => {
-    hapticFeedback.success()
-    setIsLocationShared(shared)
+  const handleTabChange = (value: string) => {
+    hapticFeedback.selection()
+    setActiveTab(value)
+  }
+
+  const handleProfileOpen = () => {
+    hapticFeedback.tap()
+    setShowProfile(true)
   }
 
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-br from-purple-50 to-pink-50">
+    <div className="flex flex-col h-screen bg-gray-50">
       {/* Header */}
-      <header className="bg-white/90 backdrop-blur-sm border-b border-purple-100 px-4 py-3 flex items-center justify-between z-10">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
+      <header className="bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between relative z-[200]">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
             <span className="text-white font-bold text-sm">V</span>
           </div>
-          <h1 className="text-xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-            Virée
-          </h1>
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Virée</h1>
+            <p className="text-xs text-gray-500">Découvrez Paris autrement</p>
+          </div>
         </div>
+
         <div className="flex items-center gap-2">
+          {selectedFilters.length > 0 && (
+            <Badge variant="secondary" className="bg-purple-100 text-purple-700">
+              {selectedFilters.length} filtre{selectedFilters.length > 1 ? "s" : ""}
+            </Badge>
+          )}
           <Button
             variant="ghost"
             size="sm"
-            onClick={handleLocationSharingOpen}
-            className="relative rounded-full"
+            onClick={handleProfileOpen}
+            className="hover:bg-purple-50 hover:text-purple-600 transition-colors duration-200"
             haptic="tap"
           >
-            <MapPin className="w-5 h-5" />
-            {isLocationShared && (
-              <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse" />
-            )}
-          </Button>
-          <Button variant="ghost" size="sm" onClick={handleProfileOpen} className="rounded-full" haptic="press">
             <User className="w-5 h-5" />
           </Button>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 relative z-0">
-        {activeView === "feed" ? (
-          <EventFeed
-            onEventSelect={handleEventSelect}
-            userLocation={userLocation}
-            searchRadius={searchRadius}
-            selectedFilters={selectedFilters}
-            onFiltersChange={setSelectedFilters}
-          />
-        ) : (
-          <MapView onEventSelect={handleEventSelect} />
-        )}
+      <main className="flex-1 overflow-hidden">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="h-full flex flex-col">
+          {/* Tab Content */}
+          <div className="flex-1 overflow-hidden">
+            <TabsContent value="map" className="h-full m-0 p-0">
+              <MapView onEventSelect={handleEventSelect} />
+            </TabsContent>
+
+            <TabsContent value="feed" className="h-full m-0 p-0">
+              <EventFeed
+                onEventSelect={handleEventSelect}
+                userLocation={userLocation}
+                searchRadius={searchRadius}
+                selectedFilters={selectedFilters}
+                onFiltersChange={setSelectedFilters}
+              />
+            </TabsContent>
+
+            <TabsContent value="calendar" className="h-full m-0 p-4">
+              <div className="text-center py-12">
+                <Calendar className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Calendrier</h3>
+                <p className="text-gray-600">Vos événements sauvegardés apparaîtront ici</p>
+              </div>
+            </TabsContent>
+          </div>
+
+          {/* Bottom Navigation - Fixed with highest z-index */}
+          <div className="bg-white border-t border-gray-200 relative z-[300]">
+            <TabsList className="grid w-full grid-cols-3 bg-transparent p-2 h-auto">
+              <TabsTrigger
+                value="map"
+                className="flex flex-col gap-1 py-3 px-4 data-[state=active]:bg-purple-50 data-[state=active]:text-purple-600 transition-all duration-200"
+                haptic="selection"
+              >
+                <Map className="w-5 h-5" />
+                <span className="text-xs font-medium">Carte</span>
+              </TabsTrigger>
+
+              <TabsTrigger
+                value="feed"
+                className="flex flex-col gap-1 py-3 px-4 data-[state=active]:bg-purple-50 data-[state=active]:text-purple-600 transition-all duration-200"
+                haptic="selection"
+              >
+                <List className="w-5 h-5" />
+                <span className="text-xs font-medium">Liste</span>
+              </TabsTrigger>
+
+              <TabsTrigger
+                value="calendar"
+                className="flex flex-col gap-1 py-3 px-4 data-[state=active]:bg-purple-50 data-[state=active]:text-purple-600 transition-all duration-200"
+                haptic="selection"
+              >
+                <Calendar className="w-5 h-5" />
+                <span className="text-xs font-medium">Agenda</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
+        </Tabs>
       </main>
 
-      {/* Bottom Navigation */}
-      <nav className="bg-white/90 backdrop-blur-sm border-t border-purple-100 px-4 py-2 z-10">
-        <div className="flex justify-center gap-8">
-          <Button
-            variant={activeView === "map" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => handleViewChange("map")}
-            className={`flex items-center gap-2 ${
-              activeView === "map" ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white" : "text-gray-600"
-            }`}
-            haptic="selection"
-          >
-            <Map className="w-4 h-4" />
-            Carte
-          </Button>
-          <Button
-            variant={activeView === "feed" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => handleViewChange("feed")}
-            className={`flex items-center gap-2 ${
-              activeView === "feed" ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white" : "text-gray-600"
-            }`}
-            haptic="selection"
-          >
-            <List className="w-4 h-4" />
-            Feed
-          </Button>
-        </div>
-      </nav>
-
-      {/* Event Sheet */}
-      {selectedEvent && <EventSheet event={selectedEvent} onClose={() => setSelectedEvent(null)} />}
+      {/* Event Details Sheet */}
+      <EventSheet event={selectedEvent} onClose={() => setSelectedEvent(null)} />
 
       {/* Profile Sheet */}
       <ProfileSheet open={showProfile} onClose={() => setShowProfile(false)} />
-
-      {/* Location Sharing Sheet */}
-      <LocationSharingSheet
-        open={showLocationSharing}
-        onClose={() => setShowLocationSharing(false)}
-        isShared={isLocationShared}
-        onToggleSharing={handleLocationSharingToggle}
-      />
     </div>
   )
 }

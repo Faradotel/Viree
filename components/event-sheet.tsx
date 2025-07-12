@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Clock, MapPin, Users, X, ExternalLink } from "lucide-react"
+import { Clock, MapPin, Users, Heart, Share2, X, ExternalLink, Calendar } from "lucide-react"
 import { hapticFeedback } from "@/utils/haptics"
 
 interface EventSheetProps {
@@ -71,13 +71,9 @@ export function EventSheet({ event, onClose }: EventSheetProps) {
               className="w-full h-48 object-cover rounded-lg shadow-sm"
             />
             {event.isNow && (
-              <Badge className="absolute top-3 left-3 bg-red-500 text-white animate-pulse">
-                En cours
-              </Badge>
+              <Badge className="absolute top-3 left-3 bg-red-500 text-white animate-pulse">En cours</Badge>
             )}
-            <Badge className="absolute top-3 right-3 bg-white/90 text-gray-700">
-              {event.type}
-            </Badge>
+            <Badge className="absolute top-3 right-3 bg-white/90 text-gray-700">{event.type}</Badge>
           </div>
 
           {/* Event Details */}
@@ -125,9 +121,7 @@ export function EventSheet({ event, onClose }: EventSheetProps) {
           {/* Friends Going */}
           {event.friends && event.friends.length > 0 && (
             <div className="animate-in fade-in-0 slide-in-from-bottom-2 duration-500 delay-300">
-              <h3 className="font-semibold text-gray-900 mb-3">
-                Amis qui y vont ({event.friends.length})
-              </h3>
+              <h3 className="font-semibold text-gray-900 mb-3">Amis qui y vont ({event.friends.length})</h3>
               <div className="flex items-center gap-3">
                 {event.friends.map((friend: string, index: number) => (
                   <div
@@ -163,4 +157,48 @@ export function EventSheet({ event, onClose }: EventSheetProps) {
             <div className="flex gap-3">
               <Button
                 variant="outline"
-                \
+                onClick={handleSave}
+                className="flex-1 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors duration-200 bg-transparent"
+                haptic="selection"
+              >
+                <Heart className="w-4 h-4 mr-2" />
+                Sauvegarder
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={handleAddToCalendar}
+                className="flex-1 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-colors duration-200 bg-transparent"
+                haptic="tap"
+              >
+                <Calendar className="w-4 h-4 mr-2" />
+                Calendrier
+              </Button>
+
+              <Button
+                variant="outline"
+                onClick={handleShare}
+                className="flex-1 hover:bg-green-50 hover:border-green-200 hover:text-green-600 transition-colors duration-200 bg-transparent"
+                haptic="tap"
+              >
+                <Share2 className="w-4 h-4 mr-2" />
+                Partager
+              </Button>
+            </div>
+          </div>
+
+          {/* Additional Info */}
+          <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-100 animate-in fade-in-0 slide-in-from-bottom-2 duration-500 delay-500">
+            <h4 className="font-medium text-purple-900 mb-2">💡 Bon à savoir</h4>
+            <ul className="text-sm text-purple-800 space-y-1">
+              <li>• Arrivez 15 minutes avant le début</li>
+              <li>• Paiement par carte accepté</li>
+              <li>• Accessible aux personnes à mobilité réduite</li>
+              <li>• Vestiaire disponible</li>
+            </ul>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  )
+}

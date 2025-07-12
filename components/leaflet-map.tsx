@@ -1,27 +1,42 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef } from "react"
+import L from "leaflet"
+import "leaflet/dist/leaflet.css"
+import "leaflet.markercluster/dist/MarkerCluster.css"
+import "leaflet.markercluster/dist/MarkerCluster.Default.css"
+import "leaflet.markercluster"
 
-declare global {
-  interface Window {
-    L: any
-  }
-}
-
-const categoryColors = {
-  music: "#8b5cf6", // purple
-  art: "#f97316", // orange
-  social: "#3b82f6", // blue
-  coffee: "#f59e0b", // amber
-}
+// Fix for default markers in Leaflet
+delete (L.Icon.Default.prototype as any)._getIconUrl
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
+  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+})
 
 interface LeafletMapProps {
   events: any[]
   friends: any[]
   onEventSelect: (event: any) => void
-  onLocationChange?: (isLocating: boolean, error: string | null, location?: { lat: number; lng: number }) => void
-  userLocation?: { lat: number; lng: number } | null
-  searchRadius?: number
+  onLocationChange: (locating: boolean, error: string | null, location?: { lat: number; lng: number }) => void
+  userLocation: { lat: number; lng: number } | null
+  searchRadius: number
+  enableClustering?: boolean
+}
+
+const categoryColors: Record<string, string> = {
+  music: "#8b5cf6",
+  social: "#3b82f6",
+  art: "#ec4899",
+  coffee: "#f59e0b",
+}
+
+const categoryIcons: Record<string, string> = {
+  music: "🎵",
+  social: "🍻",
+  art: "🎨",
+  coffee: "☕",
 }
 
 export function LeafletMap({
@@ -29,493 +44,496 @@ export function LeafletMap({
   friends,
   onEventSelect,
   onLocationChange,
-  userLocation: propUserLocation,
-  searchRadius = 2,
+  userLocation,
+  searchRadius,
+  enableClustering = true,
 }: LeafletMapProps) {
-  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(propUserLocation || null)
-  const [locationError, setLocationError] = useState<string | null>(null)
-  const [isLocating, setIsLocating] = useState(false)
-  const userMarkerRef = useRef<any>(null)
-  const radiusCircleRef = useRef<any>(null)
-  const mapContainer = useRef<HTMLDivElement>(null)
-  const map = useRef<any>(null)
-  const markersRef = useRef<any[]>([])
-  const [isLoaded, setIsLoaded] = useState(false)
+  const mapRef = useRef<L.Map | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const markersRef = useRef<L.LayerGroup | null>(null)
+  const userMarkerRef = useRef<L.Marker | null>(null)
+  const radiusCircleRef = useRef<L.Circle | null>(null)
+  const markerClusterRef = useRef<any>(null)
 
+  // Initialize map
   useEffect(() => {
-    // Load Leaflet CSS and JS
-    if (!window.L) {
-      const link = document.createElement("link")
-      link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      link.rel = "stylesheet"
-      link.integrity = "sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-      link.crossOrigin = ""
-      document.head.appendChild(link)
+    if (!containerRef.current || mapRef.current) return
 
-      const script = document.createElement("script")
-      script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-      script.integrity = "sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-      script.crossOrigin = ""
-      script.onload = () => {
-        setIsLoaded(true)
-      }
-      script.onerror = () => {
-        console.error("Failed to load Leaflet")
-      }
-      document.head.appendChild(script)
+    const map = L.map(containerRef.current, {
+      center: [48.8566, 2.3522], // Paris center
+      zoom: 13,
+      zoomControl: false,
+      attributionControl: true,
+    })
+
+    // Add OpenStreetMap tiles
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19,
+    }).addTo(map)
+
+    // Add zoom control to bottom right
+    L.control.zoom({ position: "bottomright" }).addTo(map)
+
+    mapRef.current = map
+
+    // Initialize marker cluster group if clustering is enabled
+    if (enableClustering) {
+      markerClusterRef.current = (L as any).markerClusterGroup({
+        chunkedLoading: true,
+        spiderfyOnMaxZoom: true,
+        showCoverageOnHover: false,
+        zoomToBoundsOnClick: true,
+        maxClusterRadius: 50,
+        iconCreateFunction: (cluster: any) => {
+          const count = cluster.getChildCount()
+          let className = "marker-cluster-small"
+          if (count > 10) className = "marker-cluster-medium"
+          if (count > 100) className = "marker-cluster-large"
+
+          return L.divIcon({
+            html: `<div><span>${count}</span></div>`,
+            className: `marker-cluster ${className}`,
+            iconSize: L.point(40, 40),
+          })
+        },
+      })
+      map.addLayer(markerClusterRef.current)
     } else {
-      setIsLoaded(true)
+      markersRef.current = L.layerGroup().addTo(map)
     }
-  }, [])
 
-  useEffect(() => {
-    if (isLoaded && mapContainer.current && window.L && !map.current) {
-      initializeMap()
-    }
-  }, [isLoaded])
-
-  useEffect(() => {
-    if (map.current) {
-      updateMarkers()
-    }
-  }, [events, friends])
-
-  // Update user location from props
-  useEffect(() => {
-    if (propUserLocation) {
-      setUserLocation(propUserLocation)
-      if (map.current) {
-        addUserMarker(propUserLocation)
-        updateRadiusCircle(propUserLocation, searchRadius)
-      }
-    }
-  }, [propUserLocation, searchRadius])
-
-  // Request user location on mount
-  useEffect(() => {
-    if (isLoaded && map.current && !propUserLocation) {
-      // Small delay to ensure map is fully initialized
-      setTimeout(() => {
-        getUserLocation()
-      }, 1000)
-    }
-  }, [isLoaded, propUserLocation])
-
-  // Listen for location requests from parent component
-  useEffect(() => {
+    // Listen for location requests
     const handleLocationRequest = () => {
-      getUserLocation()
+      if ("geolocation" in navigator) {
+        onLocationChange(true, null)
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords
+            onLocationChange(false, null, { lat: latitude, lng: longitude })
+            map.setView([latitude, longitude], 15)
+          },
+          (error) => {
+            let errorMessage = "Erreur de géolocalisation"
+            switch (error.code) {
+              case error.PERMISSION_DENIED:
+                errorMessage = "Géolocalisation refusée"
+                break
+              case error.POSITION_UNAVAILABLE:
+                errorMessage = "Position indisponible"
+                break
+              case error.TIMEOUT:
+                errorMessage = "Délai dépassé"
+                break
+            }
+            onLocationChange(false, errorMessage)
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 300000,
+          },
+        )
+      } else {
+        onLocationChange(false, "Géolocalisation non supportée")
+      }
     }
 
     window.addEventListener("requestLocation", handleLocationRequest)
 
     return () => {
       window.removeEventListener("requestLocation", handleLocationRequest)
+      if (mapRef.current) {
+        mapRef.current.remove()
+        mapRef.current = null
+      }
     }
-  }, [])
+  }, [onLocationChange, enableClustering])
 
-  const initializeMap = () => {
-    if (!mapContainer.current || !window.L) return
+  // Update user location marker and radius circle
+  useEffect(() => {
+    if (!mapRef.current) return
 
-    // Initialize map centered on Paris
-    map.current = window.L.map(mapContainer.current, {
-      center: [48.8566, 2.3522], // Paris coordinates [lat, lng]
-      zoom: 12,
-      zoomControl: true,
-      attributionControl: true,
-    })
+    // Remove existing user marker and radius circle
+    if (userMarkerRef.current) {
+      mapRef.current.removeLayer(userMarkerRef.current)
+    }
+    if (radiusCircleRef.current) {
+      mapRef.current.removeLayer(radiusCircleRef.current)
+    }
 
-    // Add OpenStreetMap tiles with custom styling
-    window.L.tileLayer("https://{s}.tile.openstreetmap.fr/osmfr/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      maxZoom: 19,
-    }).addTo(map.current)
+    if (userLocation) {
+      // Add user location marker
+      const userIcon = L.divIcon({
+        html: `<div class="user-location-marker">
+          <div class="user-location-dot"></div>
+          <div class="user-location-pulse"></div>
+        </div>`,
+        className: "user-location-icon",
+        iconSize: [20, 20],
+        iconAnchor: [10, 10],
+      })
 
-    updateMarkers()
-  }
+      userMarkerRef.current = L.marker([userLocation.lat, userLocation.lng], {
+        icon: userIcon,
+        zIndexOffset: 1000,
+      }).addTo(mapRef.current)
 
-  const updateMarkers = () => {
-    if (!map.current || !window.L) return
+      // Add search radius circle
+      radiusCircleRef.current = L.circle([userLocation.lat, userLocation.lng], {
+        radius: searchRadius * 1000, // Convert km to meters
+        fillColor: "#8b5cf6",
+        fillOpacity: 0.1,
+        color: "#8b5cf6",
+        weight: 2,
+        opacity: 0.5,
+      }).addTo(mapRef.current)
+    }
+  }, [userLocation, searchRadius])
+
+  // Update event markers
+  useEffect(() => {
+    if (!mapRef.current) return
 
     // Clear existing markers
-    markersRef.current.forEach((marker) => map.current.removeLayer(marker))
-    markersRef.current = []
+    if (enableClustering && markerClusterRef.current) {
+      markerClusterRef.current.clearLayers()
+    } else if (markersRef.current) {
+      markersRef.current.clearLayers()
+    }
 
     // Add event markers
     events.forEach((event) => {
-      const marker = createEventMarker(event)
-      markersRef.current.push(marker)
+      const color = categoryColors[event.category] || "#6b7280"
+      const icon = categoryIcons[event.category] || "📍"
+
+      const eventIcon = L.divIcon({
+        html: `<div class="event-marker" style="background-color: ${color}">
+          <span class="event-icon">${icon}</span>
+        </div>`,
+        className: "event-marker-container",
+        iconSize: [32, 32],
+        iconAnchor: [16, 32],
+      })
+
+      const marker = L.marker([event.lat, event.lng], { icon: eventIcon })
+
+      // Create popup content
+      const popupContent = `
+        <div class="event-popup">
+          <div class="event-popup-header">
+            <h3 class="event-popup-title">${event.name}</h3>
+            <span class="event-popup-category" style="background-color: ${color}15; color: ${color}">
+              ${icon} ${event.type}
+            </span>
+          </div>
+          <div class="event-popup-details">
+            <div class="event-popup-location">📍 ${event.location}</div>
+            ${event.time ? `<div class="event-popup-time">🕐 ${event.time}</div>` : ""}
+            ${event.price ? `<div class="event-popup-price">💰 ${event.price}</div>` : ""}
+            <div class="event-popup-attendees">👥 ${event.attendees} participants</div>
+          </div>
+          <button class="event-popup-button" onclick="window.selectEvent(${event.id})">
+            Voir les détails
+          </button>
+        </div>
+      `
+
+      marker.bindPopup(popupContent, {
+        maxWidth: 300,
+        className: "custom-popup",
+      })
+
+      // Add click handler
+      marker.on("click", () => {
+        onEventSelect(event)
+      })
+
+      // Add to appropriate layer
+      if (enableClustering && markerClusterRef.current) {
+        markerClusterRef.current.addLayer(marker)
+      } else if (markersRef.current) {
+        markersRef.current.addLayer(marker)
+      }
     })
 
     // Add friend markers
     friends.forEach((friend) => {
-      const marker = createFriendMarker(friend)
-      markersRef.current.push(marker)
-    })
-  }
+      const friendIcon = L.divIcon({
+        html: `<div class="friend-marker">
+          <img src="/placeholder-user.jpg" alt="${friend.name}" class="friend-avatar" />
+          <div class="friend-status"></div>
+        </div>`,
+        className: "friend-marker-container",
+        iconSize: [28, 28],
+        iconAnchor: [14, 28],
+      })
 
-  const updateRadiusCircle = (location: { lat: number; lng: number }, radius: number) => {
-    if (!map.current || !window.L) return
+      const marker = L.marker([friend.lat, friend.lng], { icon: friendIcon })
 
-    // Remove existing radius circle
-    if (radiusCircleRef.current) {
-      map.current.removeLayer(radiusCircleRef.current)
-    }
-
-    // Add new radius circle
-    radiusCircleRef.current = window.L.circle([location.lat, location.lng], {
-      color: "#8b5cf6",
-      fillColor: "#8b5cf6",
-      fillOpacity: 0.1,
-      radius: radius * 1000, // Convert km to meters
-      weight: 2,
-      dashArray: "5, 5",
-    }).addTo(map.current)
-  }
-
-  const getUserLocation = () => {
-    setIsLocating(true)
-    setLocationError(null)
-    onLocationChange?.(true, null)
-
-    if (!navigator.geolocation) {
-      const error = "La géolocalisation n'est pas supportée par ce navigateur"
-      setLocationError(error)
-      setIsLocating(false)
-      onLocationChange?.(false, error)
-      return
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords
-        const newLocation = { lat: latitude, lng: longitude }
-        setUserLocation(newLocation)
-        setIsLocating(false)
-        onLocationChange?.(false, null, newLocation)
-
-        // Center map on user location
-        if (map.current) {
-          map.current.setView([latitude, longitude], 14)
-          addUserMarker(newLocation)
-          updateRadiusCircle(newLocation, searchRadius)
-        }
-      },
-      (error) => {
-        let errorMessage = "Impossible d'obtenir votre position"
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            errorMessage = "Géolocalisation refusée par l'utilisateur"
-            break
-          case error.POSITION_UNAVAILABLE:
-            errorMessage = "Position non disponible"
-            break
-          case error.TIMEOUT:
-            errorMessage = "Délai d'attente dépassé"
-            break
-        }
-        setLocationError(errorMessage)
-        setIsLocating(false)
-        onLocationChange?.(false, errorMessage)
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 10000,
-        maximumAge: 300000, // 5 minutes
-      },
-    )
-  }
-
-  const addUserMarker = (location: { lat: number; lng: number }) => {
-    if (!map.current || !window.L) return
-
-    // Remove existing user marker
-    if (userMarkerRef.current) {
-      map.current.removeLayer(userMarkerRef.current)
-    }
-
-    // Create user location icon
-    const userIcon = window.L.divIcon({
-      html: `
-        <div style="
-          width: 20px;
-          height: 20px;
-          background: #3b82f6;
-          border: 3px solid white;
-          border-radius: 50%;
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
-          animation: userPulse 2s infinite;
-        "></div>
-        <div style="
-          position: absolute;
-          top: -8px;
-          left: -8px;
-          width: 36px;
-          height: 36px;
-          border: 2px solid #3b82f6;
-          border-radius: 50%;
-          opacity: 0.3;
-          animation: userRipple 2s infinite;
-        "></div>
-      `,
-      className: "user-location-icon",
-      iconSize: [20, 20],
-      iconAnchor: [10, 10],
-    })
-
-    userMarkerRef.current = window.L.marker([location.lat, location.lng], {
-      icon: userIcon,
-      zIndexOffset: 1000,
-    }).addTo(map.current)
-
-    userMarkerRef.current.bindTooltip("Votre position", {
-      permanent: false,
-      direction: "top",
-    })
-  }
-
-  const createEventMarker = (event: any) => {
-    const color = categoryColors[event.category as keyof typeof categoryColors]
-    const icons = { music: "🎵", art: "🎨", social: "🍺", coffee: "☕" }
-    const icon = icons[event.category as keyof typeof icons]
-
-    // Create custom icon with better styling
-    const customIcon = window.L.divIcon({
-      html: `
-      <div style="
-        width: 50px;
-        height: 50px;
-        background: linear-gradient(135deg, ${color}, ${color}dd);
-        border: 3px solid white;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 22px;
-        box-shadow: 0 6px 16px rgba(0,0,0,0.2);
-        animation: bounce 2s infinite;
-        cursor: pointer;
-        transition: transform 0.2s ease;
-      " onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
-        ${icon}
-      </div>
-    `,
-      className: "custom-div-icon",
-      iconSize: [50, 50],
-      iconAnchor: [25, 25],
-    })
-
-    // Create marker
-    const marker = window.L.marker([event.lat, event.lng], { icon: customIcon }).addTo(map.current)
-
-    // Enhanced popup content
-    const popupContent = `
-    <div style="padding: 12px; min-width: 220px; font-family: system-ui, -apple-system, sans-serif;">
-      <h3 style="margin: 0 0 10px 0; font-weight: bold; color: #1f2937; font-size: 16px;">${event.name}</h3>
-      <div style="margin: 6px 0; color: #6b7280; font-size: 14px; display: flex; align-items: center;">
-        <span style="margin-right: 8px;">📍</span> ${event.location}
-      </div>
-      <div style="margin: 6px 0; color: #6b7280; font-size: 14px; display: flex; align-items: center;">
-        <span style="margin-right: 8px;">🕐</span> ${event.time}
-      </div>
-      <div style="margin: 6px 0; color: #6b7280; font-size: 14px; display: flex; align-items: center;">
-        <span style="margin-right: 8px;">💰</span> <strong>${event.price}</strong>
-      </div>
-      <div style="margin: 6px 0; color: #6b7280; font-size: 14px; display: flex; align-items: center;">
-        <span style="margin-right: 8px;">👥</span> ${event.attendees} participants
-      </div>
-      ${
-        event.friends.length > 0
-          ? `
-        <div style="margin: 10px 0 6px 0; padding: 8px; background: ${color}15; border-radius: 6px;">
-          <div style="color: ${color}; font-size: 14px; font-weight: 500;">
-            👥 Tes amis: ${event.friends.join(", ")}
+      marker.bindPopup(`
+        <div class="friend-popup">
+          <div class="friend-popup-header">
+            <img src="/placeholder-user.jpg" alt="${friend.name}" class="friend-popup-avatar" />
+            <div>
+              <h3 class="friend-popup-name">${friend.name}</h3>
+              <p class="friend-popup-status">En ligne</p>
+            </div>
           </div>
         </div>
-      `
-          : ""
+      `)
+
+      // Add to appropriate layer
+      if (enableClustering && markerClusterRef.current) {
+        markerClusterRef.current.addLayer(marker)
+      } else if (markersRef.current) {
+        markersRef.current.addLayer(marker)
       }
-      <button onclick="window.selectLeafletEvent && window.selectLeafletEvent(${event.id})" style="
-        margin-top: 12px;
-        padding: 8px 16px;
-        background: linear-gradient(135deg, ${color}, ${color}dd);
-        color: white;
-        border: none;
-        border-radius: 8px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 600;
-        width: 100%;
-        transition: transform 0.2s ease;
-      " onmouseover="this.style.transform='translateY(-1px)'" onmouseout="this.style.transform='translateY(0)'">
-        Voir plus de détails
-      </button>
-    </div>
-  `
-
-    marker.bindPopup(popupContent, {
-      maxWidth: 280,
-      className: "custom-popup",
     })
 
-    return marker
-  }
-
-  const createFriendMarker = (friend: any) => {
-    // Create custom friend icon
-    const friendIcon = window.L.divIcon({
-      html: `
-        <div style="
-          width: 32px;
-          height: 32px;
-          background: linear-gradient(135deg, #10b981, #3b82f6);
-          border: 2px solid white;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-size: 12px;
-          font-weight: bold;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        ">
-          ${friend.avatar}
-        </div>
-      `,
-      className: "friend-div-icon",
-      iconSize: [32, 32],
-      iconAnchor: [16, 16],
-    })
-
-    const marker = window.L.marker(
-      [friend.lat + (Math.random() - 0.5) * 0.001, friend.lng + (Math.random() - 0.5) * 0.001],
-      { icon: friendIcon },
-    ).addTo(map.current)
-
-    marker.bindTooltip(`${friend.name} - ${friend.activity}`, {
-      permanent: false,
-      direction: "top",
-    })
-
-    return marker
-  }
-
-  // Global function to handle event selection from popup
-  useEffect(() => {
-    window.selectLeafletEvent = (eventId: number) => {
+    // Global function for popup buttons
+    ;(window as any).selectEvent = (eventId: number) => {
       const event = events.find((e) => e.id === eventId)
       if (event) {
         onEventSelect(event)
       }
     }
-
-    return () => {
-      delete window.selectLeafletEvent
-    }
-  }, [events, onEventSelect])
-
-  if (!isLoaded) {
-    return (
-      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-50 to-pink-50">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Chargement de la carte OpenStreetMap...</p>
-        </div>
-      </div>
-    )
-  }
+  }, [events, friends, onEventSelect, enableClustering])
 
   return (
     <>
-      <div ref={mapContainer} className="w-full h-full" />
+      <div ref={containerRef} className="w-full h-full z-0" />
       <style jsx global>{`
-  @keyframes bounce {
-    0%, 20%, 50%, 80%, 100% {
-      transform: translateY(0);
-    }
-    40% {
-      transform: translateY(-8px);
-    }
-    60% {
-      transform: translateY(-4px);
-    }
-  }
-  
-  @keyframes pulse {
-    0% {
-      box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.4);
-    }
-    70% {
-      box-shadow: 0 0 0 15px rgba(139, 92, 246, 0);
-    }
-    100% {
-      box-shadow: 0 0 0 0 rgba(139, 92, 246, 0);
-    }
-  }
-  
-  @keyframes userPulse {
-    0% {
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
-    }
-    50% {
-      box-shadow: 0 0 0 8px rgba(59, 130, 246, 0.1);
-    }
-    100% {
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
-    }
-  }
-  
-  @keyframes userRipple {
-    0% {
-      transform: scale(0.8);
-      opacity: 0.3;
-    }
-    100% {
-      transform: scale(2);
-      opacity: 0;
-    }
-  }
-  
-  .custom-div-icon {
-    background: none !important;
-    border: none !important;
-  }
-  
-  .friend-div-icon {
-    background: none !important;
-    border: none !important;
-  }
-  
-  .user-location-icon {
-    background: none !important;
-    border: none !important;
-  }
-  
-  .custom-popup .leaflet-popup-content-wrapper {
-    border-radius: 12px !important;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.15) !important;
-  }
-  
-  .custom-popup .leaflet-popup-tip {
-    background: white !important;
-  }
-  
-  .leaflet-container {
-    font-family: system-ui, -apple-system, sans-serif !important;
-  }
-  
-  .leaflet-control-zoom a {
-    background: rgba(255, 255, 255, 0.9) !important;
-    backdrop-filter: blur(10px) !important;
-    border: 1px solid rgba(139, 92, 246, 0.2) !important;
-    color: #8b5cf6 !important;
-  }
-  
-  .leaflet-control-zoom a:hover {
-    background: rgba(139, 92, 246, 0.1) !important;
-    color: #7c3aed !important;
-  }
-`}</style>
+        .user-location-marker {
+          position: relative;
+          width: 20px;
+          height: 20px;
+        }
+
+        .user-location-dot {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 12px;
+          height: 12px;
+          background-color: #3b82f6;
+          border: 2px solid white;
+          border-radius: 50%;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .user-location-pulse {
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+          width: 20px;
+          height: 20px;
+          background-color: #3b82f6;
+          border-radius: 50%;
+          opacity: 0.3;
+          animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+          0% {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 0.3;
+          }
+          100% {
+            transform: translate(-50%, -50%) scale(2);
+            opacity: 0;
+          }
+        }
+
+        .event-marker {
+          width: 32px;
+          height: 32px;
+          border-radius: 50% 50% 50% 0;
+          transform: rotate(-45deg);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 2px solid white;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+          cursor: pointer;
+          transition: transform 0.2s;
+        }
+
+        .event-marker:hover {
+          transform: rotate(-45deg) scale(1.1);
+        }
+
+        .event-icon {
+          transform: rotate(45deg);
+          font-size: 14px;
+        }
+
+        .friend-marker {
+          position: relative;
+          width: 28px;
+          height: 28px;
+        }
+
+        .friend-avatar {
+          width: 24px;
+          height: 24px;
+          border-radius: 50%;
+          border: 2px solid white;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .friend-status {
+          position: absolute;
+          bottom: 0;
+          right: 0;
+          width: 8px;
+          height: 8px;
+          background-color: #10b981;
+          border: 1px solid white;
+          border-radius: 50%;
+        }
+
+        .custom-popup .leaflet-popup-content-wrapper {
+          border-radius: 12px;
+          padding: 0;
+          overflow: hidden;
+        }
+
+        .custom-popup .leaflet-popup-content {
+          margin: 0;
+          padding: 0;
+        }
+
+        .event-popup {
+          padding: 16px;
+          min-width: 250px;
+        }
+
+        .event-popup-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: flex-start;
+          margin-bottom: 12px;
+        }
+
+        .event-popup-title {
+          font-size: 16px;
+          font-weight: 600;
+          margin: 0;
+          flex: 1;
+          margin-right: 8px;
+        }
+
+        .event-popup-category {
+          padding: 4px 8px;
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: 500;
+          white-space: nowrap;
+        }
+
+        .event-popup-details {
+          margin-bottom: 12px;
+          font-size: 14px;
+          color: #6b7280;
+        }
+
+        .event-popup-details > div {
+          margin-bottom: 4px;
+        }
+
+        .event-popup-button {
+          width: 100%;
+          padding: 8px 16px;
+          background: linear-gradient(to right, #8b5cf6, #ec4899);
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: opacity 0.2s;
+        }
+
+        .event-popup-button:hover {
+          opacity: 0.9;
+        }
+
+        .friend-popup {
+          padding: 12px;
+          min-width: 200px;
+        }
+
+        .friend-popup-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .friend-popup-avatar {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+        }
+
+        .friend-popup-name {
+          font-size: 14px;
+          font-weight: 600;
+          margin: 0;
+        }
+
+        .friend-popup-status {
+          font-size: 12px;
+          color: #10b981;
+          margin: 0;
+        }
+
+        .marker-cluster {
+          background-clip: padding-box;
+          border-radius: 20px;
+        }
+
+        .marker-cluster div {
+          width: 30px;
+          height: 30px;
+          margin-left: 5px;
+          margin-top: 5px;
+          text-align: center;
+          border-radius: 15px;
+          font: 12px "Helvetica Neue", Arial, Helvetica, sans-serif;
+        }
+
+        .marker-cluster span {
+          line-height: 30px;
+          color: white;
+          font-weight: bold;
+        }
+
+        .marker-cluster-small {
+          background-color: rgba(139, 92, 246, 0.6);
+        }
+
+        .marker-cluster-small div {
+          background-color: rgba(139, 92, 246, 0.8);
+        }
+
+        .marker-cluster-medium {
+          background-color: rgba(236, 72, 153, 0.6);
+        }
+
+        .marker-cluster-medium div {
+          background-color: rgba(236, 72, 153, 0.8);
+        }
+
+        .marker-cluster-large {
+          background-color: rgba(59, 130, 246, 0.6);
+        }
+
+        .marker-cluster-large div {
+          background-color: rgba(59, 130, 246, 0.8);
+        }
+      `}</style>
     </>
   )
 }
