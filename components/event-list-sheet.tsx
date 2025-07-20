@@ -1,46 +1,31 @@
 "use client"
 
-import { useMemo } from "react"
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import type React from "react"
+
+import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { MapPin, Clock, Euro, Users, Navigation } from "lucide-react"
-import { calculateDistance } from "@/utils/distance"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { Card, CardContent } from "@/components/ui/card"
+import { Search, MapPin, Clock, Users, Heart, X, SlidersHorizontal } from "lucide-react"
 import { hapticFeedback } from "@/utils/haptics"
 
 interface EventListSheetProps {
   open: boolean
   onClose: () => void
   events: any[]
-  userLocation: { lat: number; lng: number } | null
   onEventSelect: (event: any) => void
 }
 
-const categoryColors: Record<string, string> = {
-  music: "#8b5cf6",
-  social: "#3b82f6",
-  art: "#ec4899",
-  coffee: "#f59e0b",
-}
+export function EventListSheet({ open, onClose, events, onEventSelect }: EventListSheetProps) {
+  const [searchQuery, setSearchQuery] = useState("")
+  const [sortBy, setSortBy] = useState<"distance" | "time" | "popularity">("distance")
 
-const categoryIcons: Record<string, string> = {
-  music: "🎵",
-  social: "🍻",
-  art: "🎨",
-  coffee: "☕",
-}
-
-export function EventListSheet({ open, onClose, events, userLocation, onEventSelect }: EventListSheetProps) {
-  // Sort events by distance from user location
-  const sortedEvents = useMemo(() => {
-    if (!userLocation) return events
-
-    return [...events].sort((a, b) => {
-      const distanceA = calculateDistance(userLocation.lat, userLocation.lng, a.lat, a.lng)
-      const distanceB = calculateDistance(userLocation.lat, userLocation.lng, b.lat, b.lng)
-      return distanceA - distanceB
-    })
-  }, [events, userLocation])
+  const handleClose = () => {
+    hapticFeedback.sheetClose()
+    onClose()
+  }
 
   const handleEventClick = (event: any) => {
     hapticFeedback.tap()
@@ -48,139 +33,172 @@ export function EventListSheet({ open, onClose, events, userLocation, onEventSel
     onClose()
   }
 
-  const formatDistance = (distance: number) => {
-    if (distance < 1) {
-      return `${Math.round(distance * 1000)}m`
-    }
-    return `${distance.toFixed(1)}km`
+  const handleFavorite = (event: any, e: React.MouseEvent) => {
+    e.stopPropagation()
+    hapticFeedback.selection()
+    console.log("Favorited:", event.name)
   }
+
+  const filteredEvents = events.filter((event) => {
+    if (!searchQuery) return true
+    const query = searchQuery.toLowerCase()
+    return (
+      event.name.toLowerCase().includes(query) ||
+      event.location.toLowerCase().includes(query) ||
+      event.type.toLowerCase().includes(query)
+    )
+  })
+
+  const sortedEvents = [...filteredEvents].sort((a, b) => {
+    switch (sortBy) {
+      case "distance":
+        return (a.distance || 0) - (b.distance || 0)
+      case "time":
+        return a.isNow ? -1 : b.isNow ? 1 : 0
+      case "popularity":
+        return b.attendees - a.attendees
+      default:
+        return 0
+    }
+  })
 
   return (
     <Sheet open={open} onOpenChange={onClose}>
-      <SheetContent side="bottom" className="h-[80vh] rounded-t-3xl">
-        <SheetHeader className="pb-4">
-          <SheetTitle className="text-2xl font-bold text-center">Événements à proximité</SheetTitle>
-          <p className="text-center text-gray-600">
-            {sortedEvents.length} événement{sortedEvents.length !== 1 ? "s" : ""} trouvé
-            {sortedEvents.length !== 1 ? "s" : ""}
-          </p>
-        </SheetHeader>
+      <SheetContent side="bottom" className="h-[90vh] overflow-hidden">
+        <div className="flex flex-col h-full">
+          {/* Header */}
+          <SheetHeader className="flex-row items-center justify-between pb-4 border-b">
+            <SheetTitle className="text-xl font-bold">Événements ({events.length})</SheetTitle>
+            <Button variant="ghost" size="sm" onClick={handleClose}>
+              <X className="w-4 h-4" />
+            </Button>
+          </SheetHeader>
 
-        <div className="space-y-4 overflow-y-auto max-h-[calc(80vh-120px)]">
-          {sortedEvents.map((event) => {
-            const distance = userLocation
-              ? calculateDistance(userLocation.lat, userLocation.lng, event.lat, event.lng)
-              : null
+          {/* Search and Filters */}
+          <div className="py-4 space-y-4 border-b">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Input
+                placeholder="Rechercher un événement..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-4 h-12 border-gray-200 focus:border-purple-500 focus:ring-purple-500"
+              />
+            </div>
 
-            return (
-              <div
+            {/* Sort Options */}
+            <div className="flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                {sortedEvents.length} événement{sortedEvents.length > 1 ? "s" : ""}
+              </div>
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal className="w-4 h-4 text-gray-400" />
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as any)}
+                  className="text-sm border border-gray-200 rounded-md px-2 py-1 bg-white"
+                >
+                  <option value="distance">Distance</option>
+                  <option value="time">Heure</option>
+                  <option value="popularity">Popularité</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Events List */}
+          <div className="flex-1 overflow-auto py-4 space-y-3">
+            {sortedEvents.map((event) => (
+              <Card
                 key={event.id}
+                className="cursor-pointer hover:shadow-md transition-all duration-200 hover:scale-[1.01] bg-white"
                 onClick={() => handleEventClick(event)}
-                className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200 cursor-pointer active:scale-[0.98]"
               >
-                <div className="flex items-start gap-4">
-                  {/* Event Image */}
-                  <div className="w-16 h-16 bg-gray-100 rounded-lg flex-shrink-0 overflow-hidden">
-                    <img
-                      src={event.image || "/placeholder.svg"}
-                      alt={event.name}
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  {/* Event Details */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <h3 className="font-semibold text-lg text-gray-900 truncate">{event.name}</h3>
-                      <Badge
-                        variant="secondary"
-                        className="flex-shrink-0"
-                        style={{
-                          backgroundColor: `${categoryColors[event.category]}15`,
-                          color: categoryColors[event.category],
-                          borderColor: categoryColors[event.category],
-                        }}
-                      >
-                        <span className="mr-1">{categoryIcons[event.category]}</span>
-                        {event.type}
-                      </Badge>
-                    </div>
-
-                    {/* Location and Distance */}
-                    <div className="flex items-center gap-2 text-gray-600 mb-2">
-                      <MapPin className="w-4 h-4 flex-shrink-0" />
-                      <span className="truncate">{event.location}</span>
-                      {distance && (
-                        <>
-                          <span className="text-gray-400">•</span>
-                          <span className="flex items-center gap-1 text-purple-600 font-medium">
-                            <Navigation className="w-3 h-3" />
-                            {formatDistance(distance)}
-                          </span>
-                        </>
+                <CardContent className="p-0">
+                  <div className="flex">
+                    {/* Event Image */}
+                    <div className="relative w-20 h-20 flex-shrink-0">
+                      <img
+                        src={event.image || "/placeholder.svg?height=80&width=80"}
+                        alt={event.name}
+                        className="w-full h-full object-cover rounded-l-lg"
+                      />
+                      {event.isNow && (
+                        <Badge className="absolute top-1 left-1 bg-red-500 text-white text-xs animate-pulse">
+                          Live
+                        </Badge>
                       )}
                     </div>
 
-                    {/* Time and Price */}
-                    <div className="flex items-center gap-4 text-sm text-gray-600 mb-3">
-                      {event.time && (
-                        <div className="flex items-center gap-1">
-                          <Clock className="w-4 h-4" />
-                          <span>{event.time}</span>
+                    {/* Event Details */}
+                    <div className="flex-1 p-3">
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1 min-w-0">
+                          <h3 className="font-semibold text-gray-900 text-sm leading-tight mb-1 truncate">
+                            {event.name}
+                          </h3>
+                          <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
+                            <MapPin className="w-3 h-3 flex-shrink-0" />
+                            <span className="truncate">{event.location}</span>
+                            {event.distance && <span className="flex-shrink-0">• {event.distance}km</span>}
+                          </div>
                         </div>
-                      )}
-                      {event.price && (
-                        <div className="flex items-center gap-1">
-                          <Euro className="w-4 h-4" />
-                          <span className={event.isFree ? "text-green-600 font-medium" : ""}>{event.price}</span>
-                        </div>
-                      )}
-                    </div>
 
-                    {/* Attendees and Friends */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Users className="w-4 h-4 text-gray-400" />
-                        <span className="text-sm text-gray-600">
-                          {event.attendees} participant{event.attendees !== 1 ? "s" : ""}
-                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => handleFavorite(event, e)}
+                          className="p-1 h-auto hover:bg-red-50 flex-shrink-0 ml-2"
+                        >
+                          <Heart className="w-4 h-4 text-gray-400 hover:text-red-500" />
+                        </Button>
                       </div>
 
-                      {/* Friends Avatars */}
-                      {event.friends && event.friends.length > 0 && (
-                        <div className="flex items-center gap-1">
-                          <div className="flex -space-x-2">
-                            {event.friends.slice(0, 3).map((friend: string, index: number) => (
-                              <Avatar key={index} className="w-6 h-6 border-2 border-white">
-                                <AvatarImage src={`/placeholder-user.jpg`} />
-                                <AvatarFallback className="text-xs">{friend.charAt(0)}</AvatarFallback>
-                              </Avatar>
-                            ))}
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3 text-xs text-gray-600">
+                          <div className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            <span>{event.time}</span>
                           </div>
-                          {event.friends.length > 3 && (
-                            <span className="text-xs text-gray-500 ml-1">+{event.friends.length - 3}</span>
-                          )}
+                          <div className="flex items-center gap-1">
+                            <Users className="w-3 h-3" />
+                            <span>{event.attendees}</span>
+                          </div>
                         </div>
-                      )}
+
+                        <div className="flex items-center gap-2">
+                          <Badge
+                            variant="secondary"
+                            className={`text-xs ${
+                              event.price === "Gratuit"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-purple-100 text-purple-700"
+                            }`}
+                          >
+                            {event.price}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs">
+                            {event.type}
+                          </Badge>
+                        </div>
+                      </div>
                     </div>
-
-                    {/* Description Preview */}
-                    {event.description && (
-                      <p className="text-sm text-gray-600 mt-2 line-clamp-2">{event.description}</p>
-                    )}
                   </div>
-                </div>
-              </div>
-            )
-          })}
+                </CardContent>
+              </Card>
+            ))}
 
-          {sortedEvents.length === 0 && (
-            <div className="text-center py-12">
-              <div className="text-6xl mb-4">🔍</div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">Aucun événement trouvé</h3>
-              <p className="text-gray-600">Essayez de modifier vos filtres ou d'élargir votre zone de recherche</p>
-            </div>
-          )}
+            {sortedEvents.length === 0 && (
+              <div className="text-center py-12">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Search className="w-8 h-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Aucun événement trouvé</h3>
+                <p className="text-gray-600">Essayez de modifier votre recherche</p>
+              </div>
+            )}
+          </div>
         </div>
       </SheetContent>
     </Sheet>

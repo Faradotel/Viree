@@ -8,10 +8,10 @@ import { MapView } from "@/components/map-view"
 import { EventFeed } from "@/components/event-feed"
 import { EventSheet } from "@/components/event-sheet"
 import { ProfileSheet } from "@/components/profile-sheet"
-import { Map, List, User, Calendar } from "lucide-react"
+import { Map, List, Calendar, Settings, User } from "lucide-react"
 import { hapticFeedback } from "@/utils/haptics"
 
-export default function Home() {
+export default function HomePage() {
   const [selectedEvent, setSelectedEvent] = useState<any>(null)
   const [showProfile, setShowProfile] = useState(false)
   const [activeTab, setActiveTab] = useState("map")
@@ -54,14 +54,22 @@ export default function Home() {
               {selectedFilters.length} filtre{selectedFilters.length > 1 ? "s" : ""}
             </Badge>
           )}
+
           <Button
             variant="ghost"
             size="sm"
             onClick={handleProfileOpen}
             className="hover:bg-purple-50 hover:text-purple-600 transition-colors duration-200"
-            haptic="tap"
           >
             <User className="w-5 h-5" />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="hover:bg-purple-50 hover:text-purple-600 transition-colors duration-200"
+          >
+            <Settings className="w-5 h-5" />
           </Button>
         </div>
       </header>
@@ -100,7 +108,6 @@ export default function Home() {
               <TabsTrigger
                 value="map"
                 className="flex flex-col gap-1 py-3 px-4 data-[state=active]:bg-purple-50 data-[state=active]:text-purple-600 transition-all duration-200"
-                haptic="selection"
               >
                 <Map className="w-5 h-5" />
                 <span className="text-xs font-medium">Carte</span>
@@ -109,7 +116,6 @@ export default function Home() {
               <TabsTrigger
                 value="feed"
                 className="flex flex-col gap-1 py-3 px-4 data-[state=active]:bg-purple-50 data-[state=active]:text-purple-600 transition-all duration-200"
-                haptic="selection"
               >
                 <List className="w-5 h-5" />
                 <span className="text-xs font-medium">Liste</span>
@@ -118,7 +124,6 @@ export default function Home() {
               <TabsTrigger
                 value="calendar"
                 className="flex flex-col gap-1 py-3 px-4 data-[state=active]:bg-purple-50 data-[state=active]:text-purple-600 transition-all duration-200"
-                haptic="selection"
               >
                 <Calendar className="w-5 h-5" />
                 <span className="text-xs font-medium">Agenda</span>

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
 import "leaflet.markercluster/dist/MarkerCluster.css"
@@ -15,151 +15,115 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
 })
 
+interface Event {
+  id: string
+  title: string
+  location: string
+  coordinates: [number, number]
+  category: string
+  time: string
+  price: string
+  description: string
+  attendees: number
+  image: string
+}
+
 interface LeafletMapProps {
-  events: any[]
-  friends: any[]
-  onEventSelect: (event: any) => void
-  onLocationChange: (locating: boolean, error: string | null, location?: { lat: number; lng: number }) => void
-  userLocation: { lat: number; lng: number } | null
-  searchRadius: number
-  enableClustering?: boolean
+  events: Event[]
+  onEventSelect: (event: Event) => void
+  userLocation?: { lat: number; lng: number } | null
+  searchRadius?: number
 }
 
-const categoryColors: Record<string, string> = {
-  music: "#8b5cf6",
-  social: "#3b82f6",
-  art: "#ec4899",
-  coffee: "#f59e0b",
-}
-
-const categoryIcons: Record<string, string> = {
-  music: "🎵",
-  social: "🍻",
-  art: "🎨",
-  coffee: "☕",
-}
-
-export function LeafletMap({
-  events,
-  friends,
-  onEventSelect,
-  onLocationChange,
-  userLocation,
-  searchRadius,
-  enableClustering = true,
-}: LeafletMapProps) {
-  const mapRef = useRef<L.Map | null>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
-  const markersRef = useRef<L.LayerGroup | null>(null)
+export function LeafletMap({ events, onEventSelect, userLocation, searchRadius = 2 }: LeafletMapProps) {
+  const mapRef = useRef<HTMLDivElement>(null)
+  const mapInstanceRef = useRef<L.Map | null>(null)
+  const markersRef = useRef<L.MarkerClusterGroup | null>(null)
   const userMarkerRef = useRef<L.Marker | null>(null)
   const radiusCircleRef = useRef<L.Circle | null>(null)
-  const markerClusterRef = useRef<any>(null)
+  const [isMapReady, setIsMapReady] = useState(false)
 
   // Initialize map
   useEffect(() => {
-    if (!containerRef.current || mapRef.current) return
+    if (!mapRef.current || mapInstanceRef.current) return
 
-    const map = L.map(containerRef.current, {
+    const map = L.map(mapRef.current, {
       center: [48.8566, 2.3522], // Paris center
       zoom: 13,
-      zoomControl: false,
-      attributionControl: true,
+      zoomControl: true,
+      preferCanvas: true,
     })
 
     // Add OpenStreetMap tiles
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 19,
+      minZoom: 3,
+      tileSize: 256,
+      zoomOffset: 0,
     }).addTo(map)
 
     // Add zoom control to bottom right
     L.control.zoom({ position: "bottomright" }).addTo(map)
 
-    mapRef.current = map
+    mapInstanceRef.current = map
 
-    // Initialize marker cluster group if clustering is enabled
-    if (enableClustering) {
-      markerClusterRef.current = (L as any).markerClusterGroup({
-        chunkedLoading: true,
-        spiderfyOnMaxZoom: true,
-        showCoverageOnHover: false,
-        zoomToBoundsOnClick: true,
-        maxClusterRadius: 50,
-        iconCreateFunction: (cluster: any) => {
-          const count = cluster.getChildCount()
-          let className = "marker-cluster-small"
-          if (count > 10) className = "marker-cluster-medium"
-          if (count > 100) className = "marker-cluster-large"
+    // Initialize marker cluster group
+    markersRef.current = (L as any).markerClusterGroup({
+      chunkedLoading: true,
+      spiderfyOnMaxZoom: true,
+      showCoverageOnHover: false,
+      zoomToBoundsOnClick: true,
+      maxClusterRadius: 50,
+      iconCreateFunction: (cluster: any) => {
+        const count = cluster.getChildCount()
+        let className = "marker-cluster-small"
+        if (count > 10) className = "marker-cluster-medium"
+        if (count > 100) className = "marker-cluster-large"
 
-          return L.divIcon({
-            html: `<div><span>${count}</span></div>`,
-            className: `marker-cluster ${className}`,
-            iconSize: L.point(40, 40),
-          })
-        },
-      })
-      map.addLayer(markerClusterRef.current)
-    } else {
-      markersRef.current = L.layerGroup().addTo(map)
-    }
+        return L.divIcon({
+          html: `<div><span>${count}</span></div>`,
+          className: `marker-cluster ${className}`,
+          iconSize: L.point(40, 40),
+        })
+      },
+    })
+    map.addLayer(markersRef.current)
 
-    // Listen for location requests
-    const handleLocationRequest = () => {
-      if ("geolocation" in navigator) {
-        onLocationChange(true, null)
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const { latitude, longitude } = position.coords
-            onLocationChange(false, null, { lat: latitude, lng: longitude })
-            map.setView([latitude, longitude], 15)
-          },
-          (error) => {
-            let errorMessage = "Erreur de géolocalisation"
-            switch (error.code) {
-              case error.PERMISSION_DENIED:
-                errorMessage = "Géolocalisation refusée"
-                break
-              case error.POSITION_UNAVAILABLE:
-                errorMessage = "Position indisponible"
-                break
-              case error.TIMEOUT:
-                errorMessage = "Délai dépassé"
-                break
-            }
-            onLocationChange(false, errorMessage)
-          },
-          {
-            enableHighAccuracy: true,
-            timeout: 10000,
-            maximumAge: 300000,
-          },
-        )
-      } else {
-        onLocationChange(false, "Géolocalisation non supportée")
+    // Force map to resize after initialization
+    setTimeout(() => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize()
       }
-    }
-
-    window.addEventListener("requestLocation", handleLocationRequest)
+    }, 100)
 
     return () => {
-      window.removeEventListener("requestLocation", handleLocationRequest)
-      if (mapRef.current) {
-        mapRef.current.remove()
-        mapRef.current = null
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove()
+        mapInstanceRef.current = null
       }
     }
-  }, [onLocationChange, enableClustering])
+  }, [])
 
-  // Update user location marker and radius circle
+  // Handle container resize
   useEffect(() => {
-    if (!mapRef.current) return
-
-    // Remove existing user marker and radius circle
-    if (userMarkerRef.current) {
-      mapRef.current.removeLayer(userMarkerRef.current)
+    const handleResize = () => {
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.invalidateSize()
+      }
     }
-    if (radiusCircleRef.current) {
-      mapRef.current.removeLayer(radiusCircleRef.current)
+
+    window.addEventListener("resize", handleResize)
+    return () => window.removeEventListener("resize", handleResize)
+  }, [])
+
+  // Update user location marker
+  useEffect(() => {
+    if (!mapInstanceRef.current) return
+
+    // Remove existing user marker
+    if (userMarkerRef.current) {
+      mapInstanceRef.current.removeLayer(userMarkerRef.current)
     }
 
     if (userLocation) {
@@ -177,133 +141,107 @@ export function LeafletMap({
       userMarkerRef.current = L.marker([userLocation.lat, userLocation.lng], {
         icon: userIcon,
         zIndexOffset: 1000,
-      }).addTo(mapRef.current)
+      }).addTo(mapInstanceRef.current)
 
-      // Add search radius circle
-      radiusCircleRef.current = L.circle([userLocation.lat, userLocation.lng], {
-        radius: searchRadius * 1000, // Convert km to meters
-        fillColor: "#8b5cf6",
-        fillOpacity: 0.1,
-        color: "#8b5cf6",
-        weight: 2,
-        opacity: 0.5,
-      }).addTo(mapRef.current)
+      // Pan to user location
+      mapInstanceRef.current.setView([userLocation.lat, userLocation.lng], 15)
     }
-  }, [userLocation, searchRadius])
+  }, [userLocation])
 
   // Update event markers
   useEffect(() => {
-    if (!mapRef.current) return
+    if (!mapInstanceRef.current || !markersRef.current) return
 
     // Clear existing markers
-    if (enableClustering && markerClusterRef.current) {
-      markerClusterRef.current.clearLayers()
-    } else if (markersRef.current) {
-      markersRef.current.clearLayers()
-    }
+    markersRef.current.clearLayers()
 
     // Add event markers
-    events.forEach((event) => {
-      const color = categoryColors[event.category] || "#6b7280"
-      const icon = categoryIcons[event.category] || "📍"
+    if (events && events.length > 0) {
+      events.forEach((event) => {
+        if (!event.coordinates || event.coordinates.length !== 2) return
 
-      const eventIcon = L.divIcon({
-        html: `<div class="event-marker" style="background-color: ${color}">
-          <span class="event-icon">${icon}</span>
-        </div>`,
-        className: "event-marker-container",
-        iconSize: [32, 32],
-        iconAnchor: [16, 32],
-      })
+        const [lat, lng] = event.coordinates
+        if (typeof lat !== "number" || typeof lng !== "number") return
 
-      const marker = L.marker([event.lat, event.lng], { icon: eventIcon })
+        const eventType = event.category?.toLowerCase() || "autre"
+        const color = categoryColors[eventType] || "#6b7280"
+        const icon = categoryIcons[eventType] || "📍"
 
-      // Create popup content
-      const popupContent = `
-        <div class="event-popup">
-          <div class="event-popup-header">
-            <h3 class="event-popup-title">${event.name}</h3>
-            <span class="event-popup-category" style="background-color: ${color}15; color: ${color}">
-              ${icon} ${event.type}
-            </span>
-          </div>
-          <div class="event-popup-details">
-            <div class="event-popup-location">📍 ${event.location}</div>
-            ${event.time ? `<div class="event-popup-time">🕐 ${event.time}</div>` : ""}
-            ${event.price ? `<div class="event-popup-price">💰 ${event.price}</div>` : ""}
-            <div class="event-popup-attendees">👥 ${event.attendees} participants</div>
-          </div>
-          <button class="event-popup-button" onclick="window.selectEvent(${event.id})">
-            Voir les détails
-          </button>
-        </div>
-      `
+        const eventIcon = L.divIcon({
+          html: `<div class="event-marker" style="background-color: ${color}">
+            <span class="event-icon">${icon}</span>
+          </div>`,
+          className: "event-marker-container",
+          iconSize: [32, 32],
+          iconAnchor: [16, 32],
+        })
 
-      marker.bindPopup(popupContent, {
-        maxWidth: 300,
-        className: "custom-popup",
-      })
+        const marker = L.marker([lat, lng], { icon: eventIcon })
 
-      // Add click handler
-      marker.on("click", () => {
-        onEventSelect(event)
-      })
+        // Create popup content
+        const friendsList =
+          event.friends && event.friends.length > 0
+            ? `<div class="event-popup-friends">👥 ${event.friends.join(", ")}</div>`
+            : ""
 
-      // Add to appropriate layer
-      if (enableClustering && markerClusterRef.current) {
-        markerClusterRef.current.addLayer(marker)
-      } else if (markersRef.current) {
-        markersRef.current.addLayer(marker)
-      }
-    })
-
-    // Add friend markers
-    friends.forEach((friend) => {
-      const friendIcon = L.divIcon({
-        html: `<div class="friend-marker">
-          <img src="/placeholder-user.jpg" alt="${friend.name}" class="friend-avatar" />
-          <div class="friend-status"></div>
-        </div>`,
-        className: "friend-marker-container",
-        iconSize: [28, 28],
-        iconAnchor: [14, 28],
-      })
-
-      const marker = L.marker([friend.lat, friend.lng], { icon: friendIcon })
-
-      marker.bindPopup(`
-        <div class="friend-popup">
-          <div class="friend-popup-header">
-            <img src="/placeholder-user.jpg" alt="${friend.name}" class="friend-popup-avatar" />
-            <div>
-              <h3 class="friend-popup-name">${friend.name}</h3>
-              <p class="friend-popup-status">En ligne</p>
+        const popupContent = `
+          <div class="event-popup">
+            <div class="event-popup-header">
+              <h3 class="event-popup-title">${event.title}</h3>
+              <span class="event-popup-category" style="background-color: ${color}15; color: ${color}">
+                ${icon} ${event.category}
+              </span>
             </div>
+            <div class="event-popup-details">
+              <div class="event-popup-location">📍 ${event.location}</div>
+              ${event.time ? `<div class="event-popup-time">🕐 ${event.time}</div>` : ""}
+              ${event.price ? `<div class="event-popup-price">💰 ${event.price}</div>` : ""}
+              <div class="event-popup-attendees">👥 ${event.attendees || 0} participants</div>
+              ${friendsList}
+            </div>
+            <button class="event-popup-button" onclick="window.selectEvent('${event.id}')">
+              Voir les détails
+            </button>
           </div>
-        </div>
-      `)
+        `
 
-      // Add to appropriate layer
-      if (enableClustering && markerClusterRef.current) {
-        markerClusterRef.current.addLayer(marker)
-      } else if (markersRef.current) {
+        marker.bindPopup(popupContent, {
+          maxWidth: 300,
+          className: "custom-popup",
+        })
+
+        // Add click handler
+        marker.on("click", () => {
+          onEventSelect(event)
+        })
+
         markersRef.current.addLayer(marker)
-      }
-    })
-
-    // Global function for popup buttons
-    ;(window as any).selectEvent = (eventId: number) => {
-      const event = events.find((e) => e.id === eventId)
-      if (event) {
-        onEventSelect(event)
-      }
+      })
     }
-  }, [events, friends, onEventSelect, enableClustering])
+  }, [events, onEventSelect])
 
   return (
     <>
-      <div ref={containerRef} className="w-full h-full z-0" />
+      <div
+        ref={mapRef}
+        className={`w-full h-full z-0`}
+        style={{ minHeight: "100%", height: "100vh", background: "#f8fafc" }}
+      />
       <style jsx global>{`
+        .leaflet-container {
+          height: 100% !important;
+          width: 100% !important;
+          background: #f8fafc;
+        }
+
+        .leaflet-tile-container {
+          filter: none;
+        }
+
+        .leaflet-tile {
+          filter: none;
+        }
+
         .user-location-marker {
           position: relative;
           width: 20px;
@@ -370,31 +308,6 @@ export function LeafletMap({
           font-size: 14px;
         }
 
-        .friend-marker {
-          position: relative;
-          width: 28px;
-          height: 28px;
-        }
-
-        .friend-avatar {
-          width: 24px;
-          height: 24px;
-          border-radius: 50%;
-          border: 2px solid white;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
-
-        .friend-status {
-          position: absolute;
-          bottom: 0;
-          right: 0;
-          width: 8px;
-          height: 8px;
-          background-color: #10b981;
-          border: 1px solid white;
-          border-radius: 50%;
-        }
-
         .custom-popup .leaflet-popup-content-wrapper {
           border-radius: 12px;
           padding: 0;
@@ -444,6 +357,11 @@ export function LeafletMap({
           margin-bottom: 4px;
         }
 
+        .event-popup-friends {
+          color: #8b5cf6;
+          font-weight: 500;
+        }
+
         .event-popup-button {
           width: 100%;
           padding: 8px 16px;
@@ -458,35 +376,6 @@ export function LeafletMap({
 
         .event-popup-button:hover {
           opacity: 0.9;
-        }
-
-        .friend-popup {
-          padding: 12px;
-          min-width: 200px;
-        }
-
-        .friend-popup-header {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .friend-popup-avatar {
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
-        }
-
-        .friend-popup-name {
-          font-size: 14px;
-          font-weight: 600;
-          margin: 0;
-        }
-
-        .friend-popup-status {
-          font-size: 12px;
-          color: #10b981;
-          margin: 0;
         }
 
         .marker-cluster {
@@ -536,4 +425,22 @@ export function LeafletMap({
       `}</style>
     </>
   )
+}
+
+const categoryColors: { [key: string]: string } = {
+  Musique: "#8B5CF6",
+  Art: "#EC4899",
+  Gastronomie: "#F59E0B",
+  Sport: "#10B981",
+  Culture: "#3B82F6",
+  Nightlife: "#6366F1",
+}
+
+const categoryIcons: { [key: string]: string } = {
+  Musique: "♪",
+  Art: "🎨",
+  Gastronomie: "🍽️",
+  Sport: "⚽",
+  Culture: "📚",
+  Nightlife: "🌙",
 }

@@ -38,7 +38,6 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
               variant="ghost"
               size="sm"
               onClick={onClose}
-              haptic="tap"
               className="hover:bg-gray-100 transition-colors duration-200"
             >
               <X className="w-4 h-4" />
@@ -100,8 +99,8 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
               <Button
                 variant="outline"
                 size="sm"
-                haptic="tap"
                 className="h-6 px-2 bg-transparent hover:bg-purple-50 transition-colors duration-200"
+                onClick={() => hapticFeedback.tap()}
               >
                 <Plus className="w-3 h-3 mr-1" />
                 Ajouter
@@ -137,32 +136,32 @@ export function ProfileSheet({ open, onClose }: ProfileSheetProps) {
           <div className="space-y-3 pt-4 border-t animate-in fade-in-0 slide-in-from-right-2 duration-600 delay-500">
             <Button
               variant="outline"
-              haptic="tap"
               className="w-full justify-start bg-transparent hover:bg-purple-50 hover:border-purple-200 transition-all duration-200 hover:scale-[1.02]"
+              onClick={() => hapticFeedback.tap()}
             >
               <Users className="w-4 h-4 mr-3" />
               Gérer mes amis
             </Button>
             <Button
               variant="outline"
-              haptic="tap"
               className="w-full justify-start bg-transparent hover:bg-pink-50 hover:border-pink-200 transition-all duration-200 hover:scale-[1.02]"
+              onClick={() => hapticFeedback.tap()}
             >
               <Heart className="w-4 h-4 mr-3" />
               Événements sauvegardés
             </Button>
             <Button
               variant="outline"
-              haptic="tap"
               className="w-full justify-start bg-transparent hover:bg-blue-50 hover:border-blue-200 transition-all duration-200 hover:scale-[1.02]"
+              onClick={() => hapticFeedback.tap()}
             >
               <Calendar className="w-4 h-4 mr-3" />
               Mon historique
             </Button>
             <Button
               variant="outline"
-              haptic="tap"
               className="w-full justify-start bg-transparent hover:bg-gray-50 hover:border-gray-200 transition-all duration-200 hover:scale-[1.02]"
+              onClick={() => hapticFeedback.tap()}
             >
               <Settings className="w-4 h-4 mr-3" />
               Paramètres

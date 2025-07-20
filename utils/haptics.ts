@@ -1,110 +1,46 @@
+"use client"
+
 // Haptic feedback utility for mobile devices
 export const hapticFeedback = {
-  // Check if device supports haptic feedback
-  isSupported: () => {
-    return (
-      typeof window !== "undefined" &&
-      "navigator" in window &&
-      ("vibrate" in navigator || "hapticFeedback" in navigator)
-    )
-  },
-
-  // Check if device is mobile
-  isMobile: () => {
-    return (
-      typeof window !== "undefined" &&
-      /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
-    )
-  },
-
   // Light tap feedback
   tap: () => {
-    if (hapticFeedback.isSupported() && hapticFeedback.isMobile()) {
-      try {
-        if ("vibrate" in navigator) {
-          navigator.vibrate(25)
-        }
-      } catch (error) {
-        // Silently fail if haptic feedback is not available
-      }
+    if (typeof window !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate(10)
     }
   },
 
-  // Medium press feedback
-  press: () => {
-    if (hapticFeedback.isSupported() && hapticFeedback.isMobile()) {
-      try {
-        if ("vibrate" in navigator) {
-          navigator.vibrate(50)
-        }
-      } catch (error) {
-        // Silently fail if haptic feedback is not available
-      }
-    }
-  },
-
-  // Selection feedback (for toggles, checkboxes)
+  // Selection feedback (slightly stronger)
   selection: () => {
-    if (hapticFeedback.isSupported() && hapticFeedback.isMobile()) {
-      try {
-        if ("vibrate" in navigator) {
-          navigator.vibrate([25, 25])
-        }
-      } catch (error) {
-        // Silently fail if haptic feedback is not available
-      }
+    if (typeof window !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate(20)
     }
   },
 
-  // Impact feedback (for errors, deletions)
-  impact: () => {
-    if (hapticFeedback.isSupported() && hapticFeedback.isMobile()) {
-      try {
-        if ("vibrate" in navigator) {
-          navigator.vibrate([50, 25, 50])
-        }
-      } catch (error) {
-        // Silently fail if haptic feedback is not available
-      }
+  // Press feedback (stronger)
+  press: () => {
+    if (typeof window !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate([30, 10, 30])
     }
   },
 
-  // Success feedback (for confirmations)
+  // Error feedback
+  error: () => {
+    if (typeof window !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate([100, 50, 100])
+    }
+  },
+
+  // Success feedback
   success: () => {
-    if (hapticFeedback.isSupported() && hapticFeedback.isMobile()) {
-      try {
-        if ("vibrate" in navigator) {
-          navigator.vibrate([100, 50, 100, 50, 100])
-        }
-      } catch (error) {
-        // Silently fail if haptic feedback is not available
-      }
-    }
-  },
-
-  // Sheet open feedback
-  sheetOpen: () => {
-    if (hapticFeedback.isSupported() && hapticFeedback.isMobile()) {
-      try {
-        if ("vibrate" in navigator) {
-          navigator.vibrate(50)
-        }
-      } catch (error) {
-        // Silently fail if haptic feedback is not available
-      }
+    if (typeof window !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate([50, 25, 50, 25, 50])
     }
   },
 
   // Sheet close feedback
   sheetClose: () => {
-    if (hapticFeedback.isSupported() && hapticFeedback.isMobile()) {
-      try {
-        if ("vibrate" in navigator) {
-          navigator.vibrate(25)
-        }
-      } catch (error) {
-        // Silently fail if haptic feedback is not available
-      }
+    if (typeof window !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate(15)
     }
   },
 }

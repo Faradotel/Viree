@@ -1,387 +1,310 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useMemo } from "react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { FilterSheet } from "@/components/filter-sheet"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Clock, MapPin, Users, Heart, Share2, SlidersHorizontal } from "lucide-react"
-import { isWithinRadius } from "@/utils/distance"
+import { Search, MapPin, Clock, Users, Heart, Filter, SlidersHorizontal } from "lucide-react"
 import { hapticFeedback } from "@/utils/haptics"
 
-const events = [
+// Mock events data
+const mockEvents = [
   {
-    id: 1,
+    id: "1",
     name: "Apéro DJ Canal",
-    type: "Bars & Social",
-    category: "social",
     location: "Canal Saint-Martin",
-    time: "18h30 - 22h00",
+    lat: 48.8708,
+    lng: 2.3659,
+    type: "Musique",
+    time: "18h00 - 22h00",
     price: "Gratuit",
     attendees: 45,
     isNow: true,
-    lat: 48.8708,
-    lng: 2.3659,
+    description: "DJ set au bord du canal avec vue sur les péniches",
     image: "/placeholder.svg?height=200&width=400",
-    description:
-      "Venez profiter d'un apéro décontracté au bord du canal avec de la musique électronique et une ambiance conviviale.",
-    friends: ["Marie", "Paul"],
+    distance: 0.8,
   },
   {
-    id: 2,
+    id: "2",
     name: "Expo Street Art",
-    type: "Art & Expositions",
-    category: "art",
     location: "Belleville",
+    lat: 48.8722,
+    lng: 2.3767,
+    type: "Art",
     time: "14h00 - 20h00",
     price: "8€",
     attendees: 23,
-    isNow: false,
-    lat: 48.8722,
-    lng: 2.3767,
+    description: "Découverte du street art dans les rues de Belleville",
     image: "/placeholder.svg?height=200&width=400",
-    description:
-      "Découvrez les œuvres des artistes locaux dans cette exposition temporaire dédiée au street art parisien.",
-    friends: ["Sophie"],
+    distance: 1.2,
   },
   {
-    id: 3,
+    id: "3",
     name: "Coffee Cupping",
-    type: "Café & Dégustation",
-    category: "coffee",
     location: "Le Marais",
+    lat: 48.8566,
+    lng: 2.3522,
+    type: "Café",
     time: "10h00 - 12h00",
     price: "15€",
     attendees: 12,
-    isNow: false,
-    lat: 48.8566,
-    lng: 2.3522,
+    description: "Dégustation de cafés d'exception avec un barista expert",
     image: "/placeholder.svg?height=200&width=400",
-    description:
-      "Séance de dégustation de cafés d'exception avec un barista professionnel. Apprenez à distinguer les arômes.",
-    friends: [],
+    distance: 0.5,
   },
   {
-    id: 4,
-    name: "Concert Jazz",
-    type: "Concerts & Musique",
-    category: "music",
-    location: "Saint-Germain",
-    time: "21h00 - 23h30",
-    price: "25€",
-    attendees: 67,
-    isNow: false,
-    lat: 48.8534,
-    lng: 2.3488,
-    image: "/placeholder.svg?height=200&width=400",
-    description: "Soirée jazz intimiste dans un club historique avec des musiciens renommés de la scène parisienne.",
-    friends: ["Tom", "Alice"],
-  },
-  {
-    id: 5,
+    id: "4",
     name: "Quiz Night",
-    type: "Bars & Social",
-    category: "social",
-    location: "République",
-    time: "19h00 - 22h00",
-    price: "5€",
-    attendees: 34,
-    isNow: false,
-    lat: 48.8676,
-    lng: 2.3639,
+    location: "Bastille",
+    lat: 48.8532,
+    lng: 2.3692,
+    type: "Bar",
+    time: "20h00 - 23h00",
+    price: "Gratuit",
+    attendees: 67,
+    description: "Soirée quiz dans une ambiance décontractée",
     image: "/placeholder.svg?height=200&width=400",
-    description:
-      "Soirée quiz entre amis dans une ambiance décontractée. Formez votre équipe et tentez de remporter le prix !",
-    friends: ["Marie"],
+    distance: 1.8,
+  },
+  {
+    id: "5",
+    name: "Marché aux Puces",
+    location: "Saint-Ouen",
+    lat: 48.9014,
+    lng: 2.3322,
+    type: "Shopping",
+    time: "09h00 - 18h00",
+    price: "Gratuit",
+    attendees: 156,
+    description: "Chasse aux trésors dans le plus grand marché aux puces du monde",
+    image: "/placeholder.svg?height=200&width=400",
+    distance: 3.2,
   },
 ]
 
 interface EventFeedProps {
   onEventSelect: (event: any) => void
-  userLocation: { lat: number; lng: number } | null
-  searchRadius: number
-  selectedFilters: string[]
-  onFiltersChange: (filters: string[]) => void
+  userLocation?: { lat: number; lng: number } | null
+  searchRadius?: number
+  selectedFilters?: string[]
+  onFiltersChange?: (filters: string[]) => void
 }
 
 export function EventFeed({
   onEventSelect,
   userLocation,
-  searchRadius,
-  selectedFilters,
+  searchRadius = 5,
+  selectedFilters = [],
   onFiltersChange,
 }: EventFeedProps) {
-  const [sortBy, setSortBy] = useState<"time" | "distance" | "popular">("time")
+  const [searchQuery, setSearchQuery] = useState("")
+  const [sortBy, setSortBy] = useState<"distance" | "time" | "popularity">("distance")
   const [showFilters, setShowFilters] = useState(false)
 
-  // Filter events by category
-  const categoryFilteredEvents = useMemo(() => {
-    return selectedFilters.length > 0 ? events.filter((event) => selectedFilters.includes(event.category)) : events
-  }, [selectedFilters])
+  const filteredAndSortedEvents = useMemo(() => {
+    let filtered = mockEvents
 
-  // Filter events by location radius
-  const locationFilteredEvents = useMemo(() => {
-    if (!userLocation) {
-      return categoryFilteredEvents
+    // Filter by search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(
+        (event) =>
+          event.name.toLowerCase().includes(query) ||
+          event.location.toLowerCase().includes(query) ||
+          event.type.toLowerCase().includes(query) ||
+          event.description.toLowerCase().includes(query),
+      )
     }
 
-    return categoryFilteredEvents.filter((event) =>
-      isWithinRadius(userLocation.lat, userLocation.lng, event.lat, event.lng, searchRadius),
-    )
-  }, [categoryFilteredEvents, userLocation, searchRadius])
-
-  // Sort events
-  const sortedEvents = useMemo(() => {
-    const eventsWithDistance = locationFilteredEvents.map((event) => ({
-      ...event,
-      distance: userLocation
-        ? (isWithinRadius(userLocation.lat, userLocation.lng, event.lat, event.lng, searchRadius, true) as number)
-        : 0,
-    }))
-
-    switch (sortBy) {
-      case "distance":
-        return eventsWithDistance.sort((a, b) => a.distance - b.distance)
-      case "popular":
-        return eventsWithDistance.sort((a, b) => b.attendees - a.attendees)
-      case "time":
-      default:
-        return eventsWithDistance.sort((a, b) => {
-          if (a.isNow && !b.isNow) return -1
-          if (!a.isNow && b.isNow) return 1
-          return 0
+    // Filter by selected categories
+    if (selectedFilters.length > 0) {
+      filtered = filtered.filter((event) => {
+        const eventType = event.type.toLowerCase()
+        return selectedFilters.some((filter) => {
+          if (filter === "music") return eventType.includes("musique")
+          if (filter === "bar") return eventType.includes("bar")
+          if (filter === "art") return eventType.includes("art")
+          if (filter === "cafe") return eventType.includes("café")
+          if (filter === "free") return event.price === "Gratuit"
+          return false
         })
+      })
     }
-  }, [locationFilteredEvents, sortBy, userLocation, searchRadius])
+
+    // Sort events
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "distance":
+          return (a.distance || 0) - (b.distance || 0)
+        case "time":
+          return a.isNow ? -1 : b.isNow ? 1 : 0
+        case "popularity":
+          return b.attendees - a.attendees
+        default:
+          return 0
+      }
+    })
+
+    return filtered
+  }, [searchQuery, selectedFilters, sortBy])
 
   const handleEventClick = (event: any) => {
-    hapticFeedback.press()
+    hapticFeedback.tap()
     onEventSelect(event)
   }
 
-  const handleSortChange = (newSort: "time" | "distance" | "popular") => {
+  const handleFavorite = (event: any, e: React.MouseEvent) => {
+    e.stopPropagation()
     hapticFeedback.selection()
-    setSortBy(newSort)
-  }
-
-  const handleFiltersOpen = () => {
-    hapticFeedback.tap()
-    setShowFilters(true)
+    console.log("Favorited:", event.name)
   }
 
   return (
     <div className="flex flex-col h-full bg-gray-50">
-      {/* Header Controls */}
+      {/* Header */}
       <div className="bg-white border-b border-gray-200 p-4 space-y-4">
-        {/* Sort Options */}
-        <div className="flex items-center justify-between">
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            <Button
-              variant={sortBy === "time" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => handleSortChange("time")}
-              className={`${
-                sortBy === "time" ? "bg-white shadow-sm text-gray-900" : "text-gray-600 hover:text-gray-900"
-              } transition-all duration-200`}
-              haptic="selection"
-            >
-              Maintenant
-            </Button>
-            <Button
-              variant={sortBy === "popular" ? "default" : "ghost"}
-              size="sm"
-              onClick={() => handleSortChange("popular")}
-              className={`${
-                sortBy === "popular" ? "bg-white shadow-sm text-gray-900" : "text-gray-600 hover:text-gray-900"
-              } transition-all duration-200`}
-              haptic="selection"
-            >
-              Populaires
-            </Button>
-            {userLocation && (
-              <Button
-                variant={sortBy === "distance" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => handleSortChange("distance")}
-                className={`${
-                  sortBy === "distance" ? "bg-white shadow-sm text-gray-900" : "text-gray-600 hover:text-gray-900"
-                } transition-all duration-200`}
-                haptic="selection"
-              >
-                Près de moi
-              </Button>
-            )}
-          </div>
-
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleFiltersOpen}
-            className="bg-white hover:bg-purple-50 hover:border-purple-200 transition-colors duration-200"
-            haptic="tap"
-          >
-            <SlidersHorizontal className="w-4 h-4 mr-2" />
-            Filtres
-            {selectedFilters.length > 0 && (
-              <Badge variant="secondary" className="ml-2 bg-purple-100 text-purple-700">
-                {selectedFilters.length}
-              </Badge>
-            )}
-          </Button>
+        {/* Search Bar */}
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <Input
+            placeholder="Rechercher un événement..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 pr-4 h-12 border-gray-200 focus:border-purple-500 focus:ring-purple-500"
+          />
         </div>
 
-        {/* Zone Status */}
-        {userLocation && (
-          <div className="flex items-center justify-between text-sm">
-            <div className="flex items-center gap-2 text-gray-600">
-              <MapPin className="w-4 h-4" />
-              <span>
-                Zone: {searchRadius < 1 ? `${searchRadius * 1000}m` : `${searchRadius}km`} • {sortedEvents.length}{" "}
-                événement{sortedEvents.length !== 1 ? "s" : ""}
-              </span>
-            </div>
-            {selectedFilters.length > 0 && (
-              <Badge variant="outline" className="text-xs">
-                Filtré par {selectedFilters.length} catégorie{selectedFilters.length > 1 ? "s" : ""}
-              </Badge>
-            )}
+        {/* Filters and Sort */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowFilters(!showFilters)}
+              className="flex items-center gap-2"
+            >
+              <Filter className="w-4 h-4" />
+              Filtres
+              {selectedFilters.length > 0 && (
+                <Badge variant="secondary" className="ml-1">
+                  {selectedFilters.length}
+                </Badge>
+              )}
+            </Button>
           </div>
-        )}
+
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="w-4 h-4 text-gray-400" />
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="text-sm border border-gray-200 rounded-md px-2 py-1 bg-white"
+            >
+              <option value="distance">Distance</option>
+              <option value="time">Heure</option>
+              <option value="popularity">Popularité</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Results count */}
+        <div className="text-sm text-gray-600">
+          {filteredAndSortedEvents.length} événement{filteredAndSortedEvents.length > 1 ? "s" : ""} trouvé
+          {filteredAndSortedEvents.length > 1 ? "s" : ""}
+        </div>
       </div>
 
       {/* Events List */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {sortedEvents.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-              <MapPin className="w-8 h-8 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Aucun événement trouvé</h3>
-            <p className="text-gray-600 mb-4">
-              {!userLocation
-                ? "Activez votre géolocalisation pour voir les événements près de vous"
-                : selectedFilters.length > 0
-                  ? "Essayez de modifier vos filtres ou d'agrandir votre zone de recherche"
-                  : "Aucun événement dans votre zone actuellement"}
-            </p>
-            {selectedFilters.length > 0 && (
-              <Button variant="outline" onClick={() => onFiltersChange([])} haptic="tap">
-                Effacer les filtres
-              </Button>
-            )}
-          </div>
-        ) : (
-          sortedEvents.map((event, index) => (
-            <Card
-              key={event.id}
-              className="cursor-pointer hover:shadow-md transition-all duration-200 hover:scale-[1.02] bg-white border border-gray-200"
-              onClick={() => handleEventClick(event)}
-            >
-              <CardContent className="p-0">
-                <div className="relative">
+      <div className="flex-1 overflow-auto p-4 space-y-4">
+        {filteredAndSortedEvents.map((event) => (
+          <Card
+            key={event.id}
+            className="cursor-pointer hover:shadow-lg transition-all duration-200 hover:scale-[1.02] bg-white"
+            onClick={() => handleEventClick(event)}
+          >
+            <CardContent className="p-0">
+              <div className="flex">
+                {/* Event Image */}
+                <div className="relative w-24 h-24 flex-shrink-0">
                   <img
                     src={event.image || "/placeholder.svg"}
                     alt={event.name}
-                    className="w-full h-48 object-cover rounded-t-lg"
+                    className="w-full h-full object-cover rounded-l-lg"
                   />
                   {event.isNow && (
-                    <Badge className="absolute top-3 left-3 bg-red-500 text-white animate-pulse">En cours</Badge>
-                  )}
-                  <Badge className="absolute top-3 right-3 bg-white/90 text-gray-700">{event.type}</Badge>
-                  {userLocation && (
-                    <Badge className="absolute bottom-3 right-3 bg-black/70 text-white">
-                      {event.distance.toFixed(1)}km
-                    </Badge>
+                    <Badge className="absolute top-1 left-1 bg-red-500 text-white text-xs animate-pulse">Live</Badge>
                   )}
                 </div>
 
-                <div className="p-4 space-y-3">
-                  <div>
-                    <h3 className="font-bold text-lg text-gray-900 mb-1">{event.name}</h3>
-                    <p className="text-gray-600 text-sm line-clamp-2">{event.description}</p>
-                  </div>
+                {/* Event Details */}
+                <div className="flex-1 p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900 text-sm leading-tight mb-1">{event.name}</h3>
+                      <div className="flex items-center gap-4 text-xs text-gray-500 mb-2">
+                        <div className="flex items-center gap-1">
+                          <MapPin className="w-3 h-3" />
+                          <span>{event.location}</span>
+                          {event.distance && <span>• {event.distance}km</span>}
+                        </div>
+                      </div>
+                    </div>
 
-                  <div className="flex items-center gap-4 text-sm text-gray-600">
-                    <div className="flex items-center gap-1">
-                      <Clock className="w-4 h-4" />
-                      <span>{event.time}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <MapPin className="w-4 h-4" />
-                      <span>{event.location}</span>
-                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => handleFavorite(event, e)}
+                      className="p-1 h-auto hover:bg-red-50"
+                    >
+                      <Heart className="w-4 h-4 text-gray-400 hover:text-red-500" />
+                    </Button>
                   </div>
 
                   <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <span className="font-semibold text-purple-600">{event.price}</span>
-                      <div className="flex items-center gap-1 text-sm text-gray-600">
-                        <Users className="w-4 h-4" />
+                    <div className="flex items-center gap-4 text-xs text-gray-600">
+                      <div className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        <span>{event.time}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Users className="w-3 h-3" />
                         <span>{event.attendees}</span>
                       </div>
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {event.friends.length > 0 && (
-                        <div className="flex items-center gap-1">
-                          <div className="flex -space-x-2">
-                            {event.friends.slice(0, 3).map((friend, i) => (
-                              <Avatar key={i} className="w-6 h-6 border-2 border-white">
-                                <AvatarFallback className="text-xs bg-gradient-to-r from-purple-500 to-pink-500 text-white">
-                                  {friend[0]}
-                                </AvatarFallback>
-                              </Avatar>
-                            ))}
-                          </div>
-                          <span className="text-xs text-gray-600 ml-1">
-                            {event.friends.length} ami{event.friends.length > 1 ? "s" : ""}
-                          </span>
-                        </div>
-                      )}
-
-                      <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 hover:bg-red-50 hover:text-red-600"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            hapticFeedback.tap()
-                          }}
-                          haptic="tap"
-                        >
-                          <Heart className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 hover:bg-blue-50 hover:text-blue-600"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            hapticFeedback.tap()
-                          }}
-                          haptic="tap"
-                        >
-                          <Share2 className="w-4 h-4" />
-                        </Button>
-                      </div>
+                      <Badge
+                        variant="secondary"
+                        className={`text-xs ${
+                          event.price === "Gratuit" ? "bg-green-100 text-green-700" : "bg-purple-100 text-purple-700"
+                        }`}
+                      >
+                        {event.price}
+                      </Badge>
+                      <Badge variant="outline" className="text-xs">
+                        {event.type}
+                      </Badge>
                     </div>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+
+        {filteredAndSortedEvents.length === 0 && (
+          <div className="text-center py-12">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Search className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Aucun événement trouvé</h3>
+            <p className="text-gray-600">Essayez de modifier vos filtres ou votre recherche</p>
+          </div>
         )}
       </div>
-
-      {/* Filter Sheet */}
-      <FilterSheet
-        open={showFilters}
-        onClose={() => setShowFilters(false)}
-        selectedFilters={selectedFilters}
-        onFiltersChange={onFiltersChange}
-      />
     </div>
   )
 }

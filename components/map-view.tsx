@@ -1,134 +1,139 @@
 "use client"
 
-import { useState, useCallback, useMemo } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Slider } from "@/components/ui/slider"
-import { Share2, Plus, List, Search, X, Target } from "lucide-react"
-import { FilterSheet } from "@/components/filter-sheet"
-import { LocationSharingSheet } from "@/components/location-sharing-sheet"
+import { Badge } from "@/components/ui/badge"
+import { LeafletMap } from "@/components/leaflet-map"
 import { AddEventSheet } from "@/components/add-event-sheet"
 import { EventListSheet } from "@/components/event-list-sheet"
-import { LeafletMap } from "@/components/leaflet-map"
-import { isWithinRadius } from "@/utils/distance"
+import { Search, Target, List, Plus, Share2, Music, Coffee, Palette, PartyPopper, Gift, Clock } from "lucide-react"
 import { hapticFeedback } from "@/utils/haptics"
 
-const events = [
+// Mock events data with clustering
+const mockEvents = [
   {
-    id: 1,
+    id: "1",
     name: "Apéro DJ Canal",
     location: "Canal Saint-Martin",
-    time: "18h30",
-    price: "Gratuit",
-    category: "music",
-    type: "Concert",
-    description: "DJ set au bord du canal avec vue sur les péniches",
-    attendees: 45,
-    friends: ["Paul", "Marie"],
     lat: 48.8708,
-    lng: 2.3628,
-    isFree: true,
+    lng: 2.3659,
+    type: "Musique",
+    time: "18h00 - 22h00",
+    price: "Gratuit",
+    attendees: 45,
     isNow: true,
+    description: "DJ set au bord du canal avec vue sur les péniches",
     image: "/placeholder.svg?height=200&width=400",
   },
   {
-    id: 2,
+    id: "2",
     name: "Expo Street Art",
-    location: "Galerie Perrotin",
-    time: "19h00",
-    price: "12€",
-    category: "art",
-    type: "Exposition",
-    description: "Nouvelle exposition d'artistes urbains émergents",
+    location: "Belleville",
+    lat: 48.8722,
+    lng: 2.3767,
+    type: "Art",
+    time: "14h00 - 20h00",
+    price: "8€",
     attendees: 23,
-    friends: ["Sophie"],
-    lat: 48.8606,
-    lng: 2.3522,
-    isFree: false,
-    isNow: false,
+    description: "Découverte du street art dans les rues de Belleville",
     image: "/placeholder.svg?height=200&width=400",
   },
   {
-    id: 3,
-    name: "Quiz Night",
-    location: "The Frog & Rosbif",
-    time: "20h00",
-    price: "5€",
-    category: "social",
-    type: "Bar",
-    description: "Soirée quiz en anglais avec prix à gagner",
-    attendees: 67,
-    friends: [],
+    id: "3",
+    name: "Coffee Cupping",
+    location: "Le Marais",
     lat: 48.8566,
     lng: 2.3522,
-    isFree: false,
-    isNow: false,
-    image: "/placeholder.svg?height=200&width=400",
-  },
-  {
-    id: 4,
-    name: "Coffee Cupping",
-    location: "Lomi Coffee",
-    time: "17h00",
-    price: "8€",
-    category: "coffee",
-    type: "Dégustation",
-    description: "Dégustation de cafés de spécialité avec barista",
-    attendees: 12,
-    friends: ["Alex", "Tom"],
-    lat: 48.8584,
-    lng: 2.3761,
-    isFree: false,
-    isNow: true,
-    image: "/placeholder.svg?height=200&width=400",
-  },
-  {
-    id: 5,
-    name: "Rooftop Party",
-    location: "Montmartre",
-    time: "21h00",
+    type: "Café",
+    time: "10h00 - 12h00",
     price: "15€",
-    category: "social",
-    type: "Soirée",
-    description: "Soirée sur un rooftop avec vue sur Paris",
-    attendees: 89,
-    friends: [],
+    attendees: 12,
+    description: "Dégustation de cafés d'exception avec un barista expert",
+    image: "/placeholder.svg?height=200&width=400",
+  },
+  {
+    id: "4",
+    name: "Quiz Night",
+    location: "Bastille",
+    lat: 48.8532,
+    lng: 2.3692,
+    type: "Bar",
+    time: "20h00 - 23h00",
+    price: "Gratuit",
+    attendees: 67,
+    description: "Soirée quiz dans une ambiance décontractée",
+    image: "/placeholder.svg?height=200&width=400",
+  },
+  {
+    id: "5",
+    name: "Marché aux Puces",
+    location: "Saint-Ouen",
+    lat: 48.9014,
+    lng: 2.3322,
+    type: "Shopping",
+    time: "09h00 - 18h00",
+    price: "Gratuit",
+    attendees: 156,
+    description: "Chasse aux trésors dans le plus grand marché aux puces du monde",
+    image: "/placeholder.svg?height=200&width=400",
+  },
+  {
+    id: "6",
+    name: "Concert Jazz",
+    location: "Montmartre",
     lat: 48.8867,
     lng: 2.3431,
-    isFree: false,
-    isNow: false,
+    type: "Musique",
+    time: "21h00 - 00h00",
+    price: "20€",
+    attendees: 89,
+    description: "Concert de jazz dans une cave historique de Montmartre",
     image: "/placeholder.svg?height=200&width=400",
   },
   {
-    id: 6,
-    name: "Jazz Session",
-    location: "Le Procope",
-    time: "20h30",
-    price: "Gratuit",
-    category: "music",
-    type: "Concert",
-    description: "Session jazz dans un cadre historique",
+    id: "7",
+    name: "Atelier Céramique",
+    location: "République",
+    lat: 48.8675,
+    lng: 2.3634,
+    type: "Art",
+    time: "14h00 - 17h00",
+    price: "35€",
+    attendees: 8,
+    description: "Initiation à la céramique dans un atelier d'artiste",
+    image: "/placeholder.svg?height=200&width=400",
+  },
+  {
+    id: "8",
+    name: "Brunch Rooftop",
+    location: "Châtelet",
+    lat: 48.8583,
+    lng: 2.3472,
+    type: "Bar",
+    time: "11h00 - 15h00",
+    price: "28€",
     attendees: 34,
-    friends: ["Marie"],
-    lat: 48.8534,
-    lng: 2.3387,
-    isFree: true,
-    isNow: false,
+    description: "Brunch avec vue panoramique sur Paris",
     image: "/placeholder.svg?height=200&width=400",
   },
 ]
 
-const categoryFilters = [
-  { id: "music", icon: "🎵", label: "Musique", color: "#8b5cf6" },
-  { id: "social", icon: "🍻", label: "Bar/Soirée", color: "#3b82f6" },
-  { id: "art", icon: "🎨", label: "Art/Expo", color: "#ec4899" },
-  { id: "coffee", icon: "☕", label: "Café", color: "#f59e0b" },
+const categories = [
+  { id: "music", name: "Musique", icon: Music, color: "bg-purple-500", count: 12 },
+  { id: "bar", name: "Bar", icon: PartyPopper, color: "bg-pink-500", count: 8 },
+  { id: "art", name: "Art", icon: Palette, color: "bg-blue-500", count: 15 },
+  { id: "cafe", name: "Café", icon: Coffee, color: "bg-orange-500", count: 6 },
+  { id: "free", name: "Gratuit", icon: Gift, color: "bg-green-500", count: 23 },
 ]
 
-const timeFilters = [
-  { id: "now", label: "Maintenant", value: 0 },
-  { id: "tonight", label: "Ce soir", value: 1 },
-  { id: "tomorrow", label: "Demain", value: 2 },
+const timeOptions = [
+  { id: "now", label: "Maintenant", description: "En cours" },
+  { id: "morning", label: "Matin", description: "8h - 12h" },
+  { id: "afternoon", label: "Après-midi", description: "12h - 18h" },
+  { id: "evening", label: "Soirée", description: "18h - 23h" },
+  { id: "night", label: "Nuit", description: "23h - 2h" },
+  { id: "tomorrow", label: "Demain", description: "Toute la journée" },
 ]
 
 interface MapViewProps {
@@ -136,72 +141,52 @@ interface MapViewProps {
 }
 
 export function MapView({ onEventSelect }: MapViewProps) {
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
-  const [selectedTime, setSelectedTime] = useState<number>(0)
-  const [showFreeOnly, setShowFreeOnly] = useState(false)
-  const [showFilters, setShowFilters] = useState(false)
-  const [showLocationSharing, setShowLocationSharing] = useState(false)
-  const [showAddEvent, setShowAddEvent] = useState(false)
-  const [showEventList, setShowEventList] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [showSearch, setShowSearch] = useState(false)
-  const [isLocating, setIsLocating] = useState(false)
-  const [locationError, setLocationError] = useState<string | null>(null)
+  const [showTimeFilter, setShowTimeFilter] = useState(false)
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState("now")
+  const [showAddEvent, setShowAddEvent] = useState(false)
+  const [showEventList, setShowEventList] = useState(false)
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
-  const [friendsWithLocation, setFriendsWithLocation] = useState<any[]>([])
-  const [searchRadius, setSearchRadius] = useState<number>(2)
+  const [locationStatus, setLocationStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
 
-  // Memoize the location change handler
-  const handleLocationChange = useCallback(
-    (locating: boolean, error: string | null, location?: { lat: number; lng: number }) => {
-      setIsLocating(locating)
-      setLocationError(error)
-      if (location) {
-        setUserLocation(location)
-      }
-    },
-    [],
-  )
-
-  // Filter events based on all criteria
-  const filteredEvents = useMemo(() => {
-    let filtered = events
-
-    // Filter by categories
-    if (selectedCategories.length > 0) {
-      filtered = filtered.filter((event) => selectedCategories.includes(event.category))
+  // Get user location
+  const getUserLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationStatus("error")
+      return
     }
 
-    // Filter by free events
-    if (showFreeOnly) {
-      filtered = filtered.filter((event) => event.isFree)
-    }
+    setLocationStatus("loading")
+    hapticFeedback.tap()
 
-    // Filter by time
-    if (selectedTime === 0) {
-      filtered = filtered.filter((event) => event.isNow)
-    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setUserLocation({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+        })
+        setLocationStatus("success")
+        hapticFeedback.selection()
+      },
+      (error) => {
+        console.error("Geolocation error:", error)
+        setLocationStatus("error")
+        hapticFeedback.error()
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 300000, // 5 minutes
+      },
+    )
+  }
 
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase()
-      filtered = filtered.filter(
-        (event) =>
-          event.name.toLowerCase().includes(query) ||
-          event.location.toLowerCase().includes(query) ||
-          event.description.toLowerCase().includes(query),
-      )
-    }
-
-    // Filter by location radius
-    if (userLocation) {
-      filtered = filtered.filter((event) =>
-        isWithinRadius(userLocation.lat, userLocation.lng, event.lat, event.lng, searchRadius),
-      )
-    }
-
-    return filtered
-  }, [selectedCategories, showFreeOnly, selectedTime, searchQuery, userLocation, searchRadius])
+  // Auto-locate on mount
+  useEffect(() => {
+    getUserLocation()
+  }, [])
 
   const handleCategoryToggle = (categoryId: string) => {
     hapticFeedback.selection()
@@ -210,20 +195,30 @@ export function MapView({ onEventSelect }: MapViewProps) {
     )
   }
 
-  const handleRecenterMap = () => {
-    hapticFeedback.tap()
-    const event = new CustomEvent("requestLocation")
-    window.dispatchEvent(event)
+  const handleTimeSlotChange = (timeSlotId: string) => {
+    hapticFeedback.selection()
+    setSelectedTimeSlot(timeSlotId)
   }
 
   const handleAddEvent = () => {
-    hapticFeedback.press()
+    hapticFeedback.tap()
     setShowAddEvent(true)
   }
 
-  const handleToggleView = () => {
-    hapticFeedback.selection()
-    setShowEventList(true)
+  const handleShowListToggle = () => {
+    hapticFeedback.tap()
+    setShowEventList(!showEventList)
+  }
+
+  const handleShare = () => {
+    hapticFeedback.tap()
+    if (navigator.share) {
+      navigator.share({
+        title: "Virée - Découvrez Paris autrement",
+        text: "Découvrez les événements autour de vous avec Virée",
+        url: window.location.href,
+      })
+    }
   }
 
   const handleSearchToggle = () => {
@@ -234,217 +229,248 @@ export function MapView({ onEventSelect }: MapViewProps) {
     }
   }
 
-  return (
-    <div className="relative w-full h-full">
-      {/* Leaflet Map - Base Layer */}
-      <LeafletMap
-        events={filteredEvents}
-        friends={friendsWithLocation}
-        onEventSelect={onEventSelect}
-        onLocationChange={handleLocationChange}
-        userLocation={userLocation}
-        searchRadius={searchRadius}
-        enableClustering={true}
-      />
+  const handleTimeFilterToggle = () => {
+    hapticFeedback.tap()
+    setShowTimeFilter(!showTimeFilter)
+  }
 
-      {/* Search Bar - Top Layer */}
+  const filteredEvents = useMemo(() => {
+    let filtered = mockEvents
+
+    // Filter by categories
+    if (selectedCategories.length > 0) {
+      filtered = filtered.filter((event) => {
+        const eventCategory = event.type.toLowerCase()
+        const matchesCategory = selectedCategories.some((cat) => {
+          if (cat === "music") return eventCategory.includes("musique")
+          if (cat === "bar") return eventCategory.includes("bar") || eventCategory.includes("soirée")
+          if (cat === "art") return eventCategory.includes("art") || eventCategory.includes("expo")
+          if (cat === "cafe") return eventCategory.includes("café")
+          if (cat === "free") return event.price === "Gratuit"
+          return false
+        })
+        return matchesCategory
+      })
+    }
+
+    // Filter by search query
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase()
+      filtered = filtered.filter(
+        (event) =>
+          event.name.toLowerCase().includes(query) ||
+          event.location.toLowerCase().includes(query) ||
+          event.type.toLowerCase().includes(query),
+      )
+    }
+
+    // Filter by time slot
+    if (selectedTimeSlot === "now") {
+      filtered = filtered.filter((event) => event.isNow)
+    }
+    // Add more time filtering logic here based on selectedTimeSlot
+
+    return filtered
+  }, [selectedCategories, searchQuery, selectedTimeSlot])
+
+  return (
+    <div className="relative h-full w-full">
+      {/* Map */}
+      <LeafletMap events={filteredEvents} onEventSelect={onEventSelect} userLocation={userLocation} />
+
+      {/* Category Filters */}
+      <div className="absolute top-4 left-4 right-4 z-[1000]">
+        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+          {categories.map((category) => {
+            const Icon = category.icon
+            const isSelected = selectedCategories.includes(category.id)
+            return (
+              <Button
+                key={category.id}
+                variant={isSelected ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleCategoryToggle(category.id)}
+                className={`flex items-center gap-2 whitespace-nowrap bg-white/90 backdrop-blur-sm shadow-lg transition-all duration-200 hover:scale-105 ${
+                  isSelected
+                    ? `${category.color} text-white hover:opacity-90`
+                    : "hover:bg-white border-gray-200 text-gray-700"
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                <span className="text-sm font-medium">{category.name}</span>
+                <Badge variant="secondary" className="bg-white/20 text-current text-xs">
+                  {category.count}
+                </Badge>
+              </Button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Search Input (when expanded) */}
       {showSearch && (
-        <div className="absolute top-4 left-4 right-4 z-[1000] pointer-events-none">
-          <div className="flex gap-2 pointer-events-auto">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                placeholder="Rechercher un événement..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 h-11 bg-white/95 backdrop-blur-sm border border-gray-200 shadow-lg"
-              />
-            </div>
-            <Button
-              onClick={handleSearchToggle}
-              variant="outline"
-              size="icon"
-              className="bg-white/95 backdrop-blur-sm border border-gray-200 shadow-lg h-11 w-11"
-              haptic="tap"
-            >
-              <X className="w-4 h-4" />
-            </Button>
+        <div className="absolute top-20 left-4 right-4 z-[1000]">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 z-10" />
+            <Input
+              placeholder="Rechercher un événement, lieu..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 pr-4 h-12 bg-white/90 backdrop-blur-sm border-gray-200 focus:border-purple-500 focus:ring-purple-500 shadow-lg"
+              autoFocus
+            />
           </div>
         </div>
       )}
 
-      {/* Category Filters - Top Layer */}
-      <div className="absolute top-4 left-4 right-4 z-[1000] pointer-events-none">
-        <div className="flex flex-wrap gap-2 pointer-events-auto">
-          {categoryFilters.map((category) => (
-            <Button
-              key={category.id}
-              onClick={() => handleCategoryToggle(category.id)}
-              variant={selectedCategories.includes(category.id) ? "default" : "outline"}
-              size="sm"
-              className={`h-10 px-3 ${
-                selectedCategories.includes(category.id)
-                  ? "bg-white text-gray-900 shadow-lg border-2"
-                  : "bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white border border-gray-200"
-              } transition-all duration-200`}
-              style={{
-                borderColor: selectedCategories.includes(category.id) ? category.color : undefined,
-                backgroundColor: selectedCategories.includes(category.id) ? `${category.color}15` : undefined,
-              }}
-              haptic="selection"
-            >
-              <span className="text-lg mr-2">{category.icon}</span>
-              <span className="hidden sm:inline">{category.label}</span>
-            </Button>
-          ))}
-
-          {/* Free Filter */}
-          <Button
-            onClick={() => {
-              hapticFeedback.selection()
-              setShowFreeOnly(!showFreeOnly)
-            }}
-            variant={showFreeOnly ? "default" : "outline"}
-            size="sm"
-            className={`h-10 px-3 ${
-              showFreeOnly
-                ? "bg-green-100 text-green-800 border-2 border-green-500 shadow-lg"
-                : "bg-white/90 backdrop-blur-sm text-gray-700 hover:bg-white border border-gray-200"
-            } transition-all duration-200`}
-            haptic="selection"
-          >
-            <span className="text-lg mr-2">🆓</span>
-            <span className="hidden sm:inline">Gratuit</span>
-          </Button>
-        </div>
-      </div>
-
-      {/* Time Filter Slider - Top Right Layer */}
-      <div className="absolute top-20 right-4 z-[1000] pointer-events-none">
-        <div className="bg-white/95 backdrop-blur-sm border border-gray-200 rounded-lg p-3 shadow-lg pointer-events-auto">
-          <div className="text-xs text-gray-600 mb-2 text-center">Moment</div>
-          <div className="w-32">
-            <Slider
-              value={[selectedTime]}
-              onValueChange={(value) => {
-                hapticFeedback.selection()
-                setSelectedTime(value[0])
-              }}
-              max={2}
-              step={1}
-              className="w-full"
-            />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
-              <span>Maintenant</span>
-              <span>Ce soir</span>
-              <span>Demain</span>
+      {/* Time Filter (when expanded) */}
+      {showTimeFilter && (
+        <div className="absolute top-20 left-4 right-4 z-[1000]">
+          <div className="bg-white/90 backdrop-blur-sm rounded-lg shadow-lg border border-gray-200 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <Clock className="w-4 h-4 text-purple-600" />
+              <span className="text-sm font-medium text-gray-700">Quand ?</span>
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {timeOptions.map((option) => {
+                const isSelected = selectedTimeSlot === option.id
+                return (
+                  <Button
+                    key={option.id}
+                    variant={isSelected ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handleTimeSlotChange(option.id)}
+                    className={`flex flex-col items-center gap-1 h-auto py-3 transition-all duration-200 hover:scale-105 ${
+                      isSelected
+                        ? "bg-purple-500 text-white hover:bg-purple-600"
+                        : "hover:bg-gray-50 border-gray-200 text-gray-700"
+                    }`}
+                  >
+                    <span className="text-sm font-medium">{option.label}</span>
+                    <span className="text-xs opacity-75">{option.description}</span>
+                  </Button>
+                )
+              })}
             </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* Map Controls - Right Side Layer */}
-      <div className="absolute top-32 right-4 z-[1000] flex flex-col gap-2 pointer-events-none">
-        {/* Recenter Button */}
+      {/* Control Buttons */}
+      <div className="absolute bottom-24 right-4 z-[1000] flex flex-col gap-3">
+        {/* Search Button */}
         <Button
-          onClick={handleRecenterMap}
-          variant="outline"
-          size="icon"
-          className="bg-white/95 backdrop-blur-sm border border-gray-200 shadow-lg h-11 w-11 pointer-events-auto"
-          disabled={isLocating}
-          haptic="tap"
+          onClick={handleSearchToggle}
+          className={`w-12 h-12 rounded-full shadow-lg transition-all duration-200 hover:scale-110 ${
+            showSearch || searchQuery
+              ? "bg-purple-500 hover:bg-purple-600 text-white"
+              : "bg-white hover:bg-gray-50 text-gray-700"
+          }`}
         >
-          <Target className={`w-5 h-5 ${isLocating ? "animate-pulse" : ""}`} />
+          <Search className="w-5 h-5" />
         </Button>
 
-        {/* Search Toggle */}
-        {!showSearch && (
-          <Button
-            onClick={handleSearchToggle}
-            variant="outline"
-            size="icon"
-            className="bg-white/95 backdrop-blur-sm border border-gray-200 shadow-lg h-11 w-11 pointer-events-auto"
-            haptic="tap"
-          >
-            <Search className="w-5 h-5" />
-          </Button>
-        )}
-
-        {/* List View Toggle */}
+        {/* Time Filter Button */}
         <Button
-          onClick={handleToggleView}
-          variant="outline"
-          size="icon"
-          className="bg-white/95 backdrop-blur-sm border border-gray-200 shadow-lg h-11 w-11 pointer-events-auto"
-          haptic="selection"
+          onClick={handleTimeFilterToggle}
+          className={`w-12 h-12 rounded-full shadow-lg transition-all duration-200 hover:scale-110 ${
+            showTimeFilter || selectedTimeSlot !== "now"
+              ? "bg-purple-500 hover:bg-purple-600 text-white"
+              : "bg-white hover:bg-gray-50 text-gray-700"
+          }`}
+        >
+          <Clock className="w-5 h-5" />
+        </Button>
+
+        {/* Geolocation Button */}
+        <Button
+          onClick={getUserLocation}
+          disabled={locationStatus === "loading"}
+          className={`w-12 h-12 rounded-full shadow-lg transition-all duration-200 hover:scale-110 ${
+            locationStatus === "success"
+              ? "bg-green-500 hover:bg-green-600"
+              : locationStatus === "error"
+                ? "bg-red-500 hover:bg-red-600"
+                : "bg-white hover:bg-gray-50"
+          }`}
+        >
+          <Target
+            className={`w-5 h-5 ${
+              locationStatus === "success" || locationStatus === "error" ? "text-white" : "text-gray-700"
+            } ${locationStatus === "loading" ? "animate-spin" : ""}`}
+          />
+        </Button>
+
+        {/* List View Button */}
+        <Button
+          onClick={handleShowListToggle}
+          className={`w-12 h-12 rounded-full shadow-lg transition-all duration-200 hover:scale-110 ${
+            showEventList ? "bg-purple-500 hover:bg-purple-600 text-white" : "bg-white hover:bg-gray-50 text-gray-700"
+          }`}
         >
           <List className="w-5 h-5" />
         </Button>
 
-        {/* Share Location */}
+        {/* Share Button */}
         <Button
-          onClick={() => setShowLocationSharing(true)}
-          variant="outline"
-          size="icon"
-          className="bg-white/95 backdrop-blur-sm border border-gray-200 shadow-lg h-11 w-11 pointer-events-auto"
-          haptic="tap"
+          onClick={handleShare}
+          className="w-12 h-12 rounded-full bg-white hover:bg-gray-50 shadow-lg transition-all duration-200 hover:scale-110"
         >
-          <Share2 className="w-5 h-5" />
+          <Share2 className="w-5 h-5 text-gray-700" />
         </Button>
       </div>
 
-      {/* Add Event Button - Floating Layer */}
-      <div className="absolute bottom-24 right-4 z-[1000] pointer-events-none">
+      {/* Add Event Button */}
+      <div className="absolute bottom-24 left-4 z-[1000]">
         <Button
           onClick={handleAddEvent}
-          size="lg"
-          className="bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 text-white shadow-xl h-14 w-14 rounded-full pointer-events-auto transform hover:scale-105 transition-all duration-200"
-          haptic="press"
+          className="w-14 h-14 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 shadow-lg transition-all duration-200 hover:scale-110"
         >
-          <Plus className="w-6 h-6" />
+          <Plus className="w-6 h-6 text-white" />
         </Button>
       </div>
 
-      {/* Status Messages - Bottom Left Layer */}
-      <div className="absolute bottom-24 left-4 z-[1000] space-y-2 pointer-events-none max-w-xs">
-        {locationError && (
-          <div className="bg-red-100/95 backdrop-blur-sm border border-red-300 rounded-lg p-2 shadow-sm pointer-events-auto">
-            <p className="text-xs text-red-800">⚠️ {locationError}</p>
+      {/* Status Messages */}
+      {locationStatus === "loading" && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[1000]">
+          <div className="bg-white/90 backdrop-blur-sm rounded-lg p-4 shadow-lg border border-gray-200">
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm font-medium text-gray-700">Localisation en cours...</span>
+            </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {userLocation && (
-          <div className="bg-purple-100/95 backdrop-blur-sm border border-purple-300 rounded-lg p-2 shadow-sm pointer-events-auto">
-            <p className="text-xs text-purple-800">
-              📍 {filteredEvents.length} événement{filteredEvents.length !== 1 ? "s" : ""} dans{" "}
-              {searchRadius < 1 ? `${searchRadius * 1000}m` : `${searchRadius}km`}
-            </p>
+      {locationStatus === "error" && (
+        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[1000]">
+          <div className="bg-red-50 backdrop-blur-sm rounded-lg p-4 shadow-lg border border-red-200">
+            <div className="flex items-center gap-3">
+              <div className="w-5 h-5 bg-red-500 rounded-full" />
+              <span className="text-sm font-medium text-red-700">Impossible de vous localiser</span>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Sheets - Top Layer */}
-      <FilterSheet
-        open={showFilters}
-        onClose={() => setShowFilters(false)}
-        selectedFilters={selectedCategories}
-        onFiltersChange={setSelectedCategories}
-      />
+      {/* Results Counter */}
+      {(selectedCategories.length > 0 || searchQuery) && (
+        <div className="absolute bottom-32 left-1/2 transform -translate-x-1/2 z-[1000]">
+          <Badge className="bg-white/90 backdrop-blur-sm text-gray-700 border border-gray-200 shadow-lg">
+            {filteredEvents.length} événement{filteredEvents.length > 1 ? "s" : ""} trouvé
+            {filteredEvents.length > 1 ? "s" : ""}
+          </Badge>
+        </div>
+      )}
 
-      <LocationSharingSheet
-        open={showLocationSharing}
-        onClose={() => setShowLocationSharing(false)}
-        userLocation={userLocation}
-        onFriendsLocationUpdate={(friends) => setFriendsWithLocation(friends)}
-      />
+      {/* Add Event Sheet */}
+      <AddEventSheet open={showAddEvent} onClose={() => setShowAddEvent(false)} />
 
-      <AddEventSheet open={showAddEvent} onClose={() => setShowAddEvent(false)} userLocation={userLocation} />
-
+      {/* Event List Sheet */}
       <EventListSheet
         open={showEventList}
         onClose={() => setShowEventList(false)}
         events={filteredEvents}
-        userLocation={userLocation}
         onEventSelect={onEventSelect}
       />
     </div>

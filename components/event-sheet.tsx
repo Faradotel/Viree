@@ -1,10 +1,10 @@
 "use client"
 
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Clock, MapPin, Users, Heart, Share2, X, ExternalLink, Calendar } from "lucide-react"
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet"
+import { MapPin, Clock, Euro, Users, Heart, Share2, Navigation, Calendar, Star, X } from "lucide-react"
 import { hapticFeedback } from "@/utils/haptics"
 
 interface EventSheetProps {
@@ -13,6 +13,9 @@ interface EventSheetProps {
 }
 
 export function EventSheet({ event, onClose }: EventSheetProps) {
+  const [isFavorited, setIsFavorited] = useState(false)
+  const [isAttending, setIsAttending] = useState(false)
+
   if (!event) return null
 
   const handleClose = () => {
@@ -20,9 +23,14 @@ export function EventSheet({ event, onClose }: EventSheetProps) {
     onClose()
   }
 
-  const handleSave = () => {
+  const handleFavorite = () => {
     hapticFeedback.selection()
-    console.log("Event saved:", event.name)
+    setIsFavorited(!isFavorited)
+  }
+
+  const handleAttend = () => {
+    hapticFeedback.tap()
+    setIsAttending(!isAttending)
   }
 
   const handleShare = () => {
@@ -30,14 +38,18 @@ export function EventSheet({ event, onClose }: EventSheetProps) {
     if (navigator.share) {
       navigator.share({
         title: event.name,
-        text: `${event.description}`,
+        text: event.description,
         url: window.location.href,
       })
     } else {
-      // Fallback for browsers that don't support Web Share API
       navigator.clipboard.writeText(window.location.href)
-      console.log("Link copied to clipboard")
     }
+  }
+
+  const handleGetDirections = () => {
+    hapticFeedback.tap()
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${event.lat},${event.lng}`
+    window.open(url, "_blank")
   }
 
   const handleGetTickets = () => {
@@ -45,157 +57,150 @@ export function EventSheet({ event, onClose }: EventSheetProps) {
     console.log("Getting tickets for:", event.name)
   }
 
-  const handleAddToCalendar = () => {
-    hapticFeedback.tap()
-    console.log("Adding to calendar:", event.name)
-  }
-
   return (
     <Sheet open={!!event} onOpenChange={onClose}>
-      <SheetContent side="bottom" className="h-[85vh] rounded-t-2xl">
-        <SheetHeader className="text-left pb-4">
-          <div className="flex items-center justify-between">
-            <SheetTitle className="text-xl font-bold text-gray-900">Détails de l'événement</SheetTitle>
-            <Button variant="ghost" size="sm" onClick={handleClose} haptic="tap">
+      <SheetContent side="bottom" className="h-[90vh] overflow-hidden">
+        <div className="flex flex-col h-full">
+          {/* Header with close button */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="w-6" /> {/* Spacer */}
+            <div className="w-12 h-1 bg-gray-300 rounded-full" />
+            <Button variant="ghost" size="sm" onClick={handleClose}>
               <X className="w-4 h-4" />
             </Button>
           </div>
-        </SheetHeader>
 
-        <div className="space-y-6 pb-6 overflow-y-auto">
-          {/* Event Image */}
-          <div className="relative animate-in fade-in-0 slide-in-from-bottom-2 duration-500 delay-100">
+          {/* Image Header */}
+          <div className="relative h-48 -mx-6 mb-6">
             <img
-              src={event.image || "/placeholder.svg"}
+              src={event.image || "/placeholder.svg?height=300&width=600"}
               alt={event.name}
-              className="w-full h-48 object-cover rounded-lg shadow-sm"
+              className="w-full h-full object-cover"
             />
-            {event.isNow && (
-              <Badge className="absolute top-3 left-3 bg-red-500 text-white animate-pulse">En cours</Badge>
-            )}
-            <Badge className="absolute top-3 right-3 bg-white/90 text-gray-700">{event.type}</Badge>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+            <div className="absolute bottom-4 left-6 right-6">
+              <div className="flex items-center gap-2 mb-2">
+                <Badge className="bg-white/20 backdrop-blur-sm text-white border-white/20">{event.type}</Badge>
+                {event.isNow && <Badge className="bg-red-500 text-white animate-pulse">En cours</Badge>}
+              </div>
+              <SheetTitle className="text-white text-2xl font-bold leading-tight">{event.name}</SheetTitle>
+            </div>
           </div>
 
-          {/* Event Details */}
-          <div className="space-y-4 animate-in fade-in-0 slide-in-from-bottom-2 duration-500 delay-200">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">{event.name}</h2>
+          {/* Content */}
+          <div className="flex-1 overflow-auto space-y-6">
+            {/* Quick Info */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                  <Clock className="w-4 h-4 text-purple-600" />
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">Horaires</div>
+                  <div className="font-medium">{event.time}</div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                  <Euro className="w-4 h-4 text-green-600" />
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">Prix</div>
+                  <div className="font-medium">{event.price}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Location */}
+            <div className="space-y-3">
+              <h3 className="font-semibold text-gray-900">Localisation</h3>
+              <div className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg">
+                <MapPin className="w-5 h-5 text-gray-400 mt-0.5" />
+                <div className="flex-1">
+                  <div className="font-medium">{event.location}</div>
+                  {event.distance && <div className="text-sm text-gray-500">À {event.distance}km de vous</div>}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleGetDirections}
+                  className="flex items-center gap-1 bg-transparent"
+                >
+                  <Navigation className="w-4 h-4" />
+                  Itinéraire
+                </Button>
+              </div>
+            </div>
+
+            {/* Description */}
+            <div className="space-y-3">
+              <h3 className="font-semibold text-gray-900">Description</h3>
               <p className="text-gray-600 leading-relaxed">{event.description}</p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <Clock className="w-5 h-5 text-purple-500" />
-                <div>
-                  <p className="font-medium text-gray-900">Horaires</p>
-                  <p className="text-sm text-gray-600">{event.time}</p>
+            {/* Participants */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-gray-900">Participants</h3>
+                <div className="flex items-center gap-1 text-sm text-gray-500">
+                  <Users className="w-4 h-4" />
+                  {event.attendees} personnes
                 </div>
               </div>
+            </div>
 
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <MapPin className="w-5 h-5 text-purple-500" />
-                <div>
-                  <p className="font-medium text-gray-900">Lieu</p>
-                  <p className="text-sm text-gray-600">{event.location}</p>
+            {/* Reviews/Rating */}
+            <div className="space-y-3">
+              <h3 className="font-semibold text-gray-900">Avis</h3>
+              <div className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star
+                      key={i}
+                      className={`w-4 h-4 ${i < 4 ? "fill-yellow-400 text-yellow-400" : "text-gray-300"}`}
+                    />
+                  ))}
                 </div>
+                <span className="font-medium">4.2</span>
+                <span className="text-sm text-gray-500">(127 avis)</span>
               </div>
+            </div>
 
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <Users className="w-5 h-5 text-purple-500" />
-                <div>
-                  <p className="font-medium text-gray-900">Participants</p>
-                  <p className="text-sm text-gray-600">{event.attendees} personnes</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                <div className="w-5 h-5 text-purple-500 font-bold">€</div>
-                <div>
-                  <p className="font-medium text-gray-900">Prix</p>
-                  <p className="text-sm text-gray-600">{event.price}</p>
-                </div>
-              </div>
+            {/* Additional Info */}
+            <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-100">
+              <h4 className="font-medium text-purple-900 mb-2">💡 Bon à savoir</h4>
+              <ul className="text-sm text-purple-800 space-y-1">
+                <li>• Arrivez 15 minutes avant le début</li>
+                <li>• Paiement par carte accepté</li>
+                <li>• Accessible aux personnes à mobilité réduite</li>
+                <li>• Vestiaire disponible</li>
+              </ul>
             </div>
           </div>
-
-          {/* Friends Going */}
-          {event.friends && event.friends.length > 0 && (
-            <div className="animate-in fade-in-0 slide-in-from-bottom-2 duration-500 delay-300">
-              <h3 className="font-semibold text-gray-900 mb-3">Amis qui y vont ({event.friends.length})</h3>
-              <div className="flex items-center gap-3">
-                {event.friends.map((friend: string, index: number) => (
-                  <div
-                    key={index}
-                    className="flex items-center gap-2 p-2 bg-purple-50 rounded-lg hover:bg-purple-100 transition-colors duration-200 cursor-pointer"
-                    onClick={() => hapticFeedback.tap()}
-                  >
-                    <Avatar className="w-8 h-8">
-                      <AvatarFallback className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-sm">
-                        {friend[0]}
-                      </AvatarFallback>
-                    </Avatar>
-                    <span className="text-sm font-medium text-gray-900">{friend}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Action Buttons */}
-          <div className="space-y-3 pt-4 border-t animate-in fade-in-0 slide-in-from-bottom-2 duration-500 delay-400">
-            <div className="flex gap-3">
-              <Button
-                onClick={handleGetTickets}
-                className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 transition-all duration-200 hover:scale-[1.02] hover:shadow-lg"
-                haptic="press"
-              >
-                <ExternalLink className="w-4 h-4 mr-2" />
-                {event.price === "Gratuit" ? "Réserver" : "Acheter des billets"}
-              </Button>
-            </div>
+          <div className="flex gap-3 pt-4 border-t border-gray-200">
+            <Button
+              variant="outline"
+              onClick={handleFavorite}
+              className={`flex-1 ${isFavorited ? "bg-red-50 border-red-200 text-red-600" : ""}`}
+            >
+              <Heart className={`w-4 h-4 mr-2 ${isFavorited ? "fill-current" : ""}`} />
+              {isFavorited ? "Retiré" : "Sauvegarder"}
+            </Button>
 
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={handleSave}
-                className="flex-1 hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors duration-200 bg-transparent"
-                haptic="selection"
-              >
-                <Heart className="w-4 h-4 mr-2" />
-                Sauvegarder
-              </Button>
+            <Button variant="outline" onClick={handleShare}>
+              <Share2 className="w-4 h-4" />
+            </Button>
 
-              <Button
-                variant="outline"
-                onClick={handleAddToCalendar}
-                className="flex-1 hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-colors duration-200 bg-transparent"
-                haptic="tap"
-              >
-                <Calendar className="w-4 h-4 mr-2" />
-                Calendrier
-              </Button>
-
-              <Button
-                variant="outline"
-                onClick={handleShare}
-                className="flex-1 hover:bg-green-50 hover:border-green-200 hover:text-green-600 transition-colors duration-200 bg-transparent"
-                haptic="tap"
-              >
-                <Share2 className="w-4 h-4 mr-2" />
-                Partager
-              </Button>
-            </div>
-          </div>
-
-          {/* Additional Info */}
-          <div className="p-4 bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg border border-purple-100 animate-in fade-in-0 slide-in-from-bottom-2 duration-500 delay-500">
-            <h4 className="font-medium text-purple-900 mb-2">💡 Bon à savoir</h4>
-            <ul className="text-sm text-purple-800 space-y-1">
-              <li>• Arrivez 15 minutes avant le début</li>
-              <li>• Paiement par carte accepté</li>
-              <li>• Accessible aux personnes à mobilité réduite</li>
-              <li>• Vestiaire disponible</li>
-            </ul>
+            <Button
+              onClick={handleGetTickets}
+              className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+            >
+              <Calendar className="w-4 h-4 mr-2" />
+              {event.price === "Gratuit" ? "Réserver" : "Billets"}
+            </Button>
           </div>
         </div>
       </SheetContent>
