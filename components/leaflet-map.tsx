@@ -64,7 +64,6 @@ export function LeafletMap({ events, onEventSelect, userLocation, searchRadius =
     }).addTo(map)
 
     // Add zoom control to bottom right
-    L.control.zoom({ position: "bottomright" }).addTo(map)
 
     mapInstanceRef.current = map
 
