@@ -1,14 +1,27 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
+import dynamic from "next/dynamic"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { LeafletMap } from "@/components/leaflet-map"
 import { AddEventSheet } from "@/components/add-event-sheet"
 import { EventListSheet } from "@/components/event-list-sheet"
 import { Search, Target, List, Plus, Share2, Music, Coffee, Palette, PartyPopper, Gift, Clock } from "lucide-react"
 import { hapticFeedback } from "@/utils/haptics"
+
+// Dynamically import LeafletMap to avoid SSR issues
+const LeafletMap = dynamic(() => import("@/components/leaflet-map").then(mod => ({ default: mod.LeafletMap })), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full bg-gray-100 flex items-center justify-center">
+      <div className="text-center">
+        <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+        <p className="text-sm text-gray-600">Chargement de la carte...</p>
+      </div>
+    </div>
+  ),
+})
 
 // Mock events data with clustering
 const mockEvents = [
