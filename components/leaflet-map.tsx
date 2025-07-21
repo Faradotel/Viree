@@ -50,7 +50,7 @@ export function LeafletMap({ events, onEventSelect, userLocation, searchRadius =
     const map = L.map(mapRef.current, {
       center: [48.8566, 2.3522], // Paris center
       zoom: 13,
-      zoomControl: true,
+      zoomControl: false,
       preferCanvas: true,
     })
 
